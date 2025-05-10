@@ -13,18 +13,23 @@ public abstract class TemplateClasses
         public ulong ChannelId { get; set; }
     }
     
+    public class Config
+    {
+        public bool ConsolidateEmbeds { get; set; }
+    }
+
     public class ServerListResponse
     {
         public string Object { get; set; }
         public ServerResponse[] Data { get; set; }
     }
-    
+
     public class ServerResponse
     {
         public string Object { get; set; }
         public ServerAttributes Attributes { get; set; }
     }
-    
+
     public class StatsResponse
     {
         public string Object { get; set; }
@@ -37,42 +42,34 @@ public abstract class TemplateClasses
         public string Uuid { get; set; }
         public string Name { get; set; }
     }
-    
+
     public class StatsAttributes
     {
-        [JsonPropertyName("current_state")]
-        public string CurrentState { get; set; }
+        [JsonPropertyName("current_state")] public string CurrentState { get; set; }
 
-        [JsonPropertyName("is_suspended")]
-        public bool IsSuspended { get; set; }
+        [JsonPropertyName("is_suspended")] public bool IsSuspended { get; set; }
 
         public StatsResources Resources { get; set; }
     }
 
     public class StatsResources
     {
-        [JsonPropertyName("memory_bytes")]
-        public long MemoryBytes { get; set; }
+        [JsonPropertyName("memory_bytes")] public long MemoryBytes { get; set; }
 
-        [JsonPropertyName("cpu_absolute")]
-        public double CpuAbsolute { get; set; }
+        [JsonPropertyName("cpu_absolute")] public double CpuAbsolute { get; set; }
 
-        [JsonPropertyName("disk_bytes")]
-        public long DiskBytes { get; set; }
+        [JsonPropertyName("disk_bytes")] public long DiskBytes { get; set; }
 
-        [JsonPropertyName("network_rx_bytes")]
-        public long NetworkRxBytes { get; set; }
+        [JsonPropertyName("network_rx_bytes")] public long NetworkRxBytes { get; set; }
 
-        [JsonPropertyName("network_tx_bytes")]
-        public long NetworkTxBytes { get; set; }
+        [JsonPropertyName("network_tx_bytes")] public long NetworkTxBytes { get; set; }
 
         public long Uptime { get; set; }
     }
-    
+
     public class TrackedMessage
     {
         public ulong ChannelId { get; set; }
         public ulong MessageId { get; set; }
     }
-
 }
