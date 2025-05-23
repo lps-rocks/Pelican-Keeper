@@ -2,18 +2,20 @@
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Interactivity; //TODO: Add Pagination
 
 namespace Pelican_Keeper;
 
 using static TemplateClasses;
 using static HelperClass; 
 using static PelicanInterface;
+using static ConsoleExt;
 
 internal static class Program
 {
     private static DiscordChannel? _targetChannel;
     public static Secrets? Secrets;
-    private static Config? Config;
+    private static Config? _config;
 
     private static async Task Main()
     {
@@ -21,15 +23,15 @@ internal static class Program
         Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson);
         if (Secrets == null)
         {
-            Console.WriteLine("Failed to load secrets.");
+            WriteLineWithPretext("Failed to load secrets.", OutputType.Error);
             return;
         }
         
         var configJson = await File.ReadAllTextAsync("Config.json");
-        Config = JsonSerializer.Deserialize<Config>(configJson);
-        if (Config == null)
+        _config = JsonSerializer.Deserialize<Config>(configJson);
+        if (_config == null)
         {
-            Console.WriteLine("Failed to load config.");
+            WriteLineWithPretext("Failed to load config.", OutputType.Error);
             return;
         }
 
@@ -48,9 +50,9 @@ internal static class Program
 
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
-        Console.WriteLine("Bot is connected and ready!");
+        WriteLineWithPretext("Bot is connected and ready!");
         _targetChannel = await sender.GetChannelAsync(Secrets!.ChannelId);
-        Console.WriteLine($"Target channel: {_targetChannel.Name}");
+        WriteLineWithPretext($"Target channel: {_targetChannel.Name}");
         _ = StartStatsUpdater(sender, Secrets.ChannelId);
     }
     
@@ -61,11 +63,11 @@ internal static class Program
 
         if (servers == null || servers.Data.Length == 0)
         {
-            Console.WriteLine("No servers found.");
+            WriteLineWithPretext("No servers found.");
             return;
         }
 
-        if (Config!.ConsolidateEmbeds)
+        if (_config!.ConsolidateEmbeds)
         {
             _ = Task.Run(async () =>
             {
@@ -96,7 +98,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Updater error for {uuid}: {ex.Message}");
+                        WriteLineWithPretext($"Updater error for {uuid}: {ex.Message}", OutputType.Warning);
                     }
                     
                     await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
@@ -137,7 +139,7 @@ internal static class Program
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Updater error for {uuid}: {ex.Message}");
+                            WriteLineWithPretext($"Updater error for {uuid}: {ex.Message}", OutputType.Warning);
                         }
 
                         await Task.Delay(TimeSpan.FromSeconds(10)); // delay per server
@@ -198,14 +200,14 @@ internal static class Program
             embed.AddField($"🎮 {name}", summary, inline: true);
             
             if (embed.Fields.Count < 25) continue;
-            Console.WriteLine("reached embed limit of 25 fields");
+            WriteLineWithPretext("reached embed limit of 25 fields", OutputType.Error);
             break; // prevent Discord embed limit
         }
         
         var charCount = GetEmbedCharacterCount(embed);
-        Console.WriteLine($"Embed character count: {charCount}");
+        WriteLineWithPretext($"Embed character count: {charCount}");
 
-        if (charCount > 6000) Console.WriteLine("⚠️ Embed exceeds the 6000 character limit!");
+        if (charCount > 6000) WriteLineWithPretext("⚠️ Embed exceeds the 6000 character limit!", OutputType.Error);
         
         return Task.FromResult(embed.Build()); 
     }
@@ -249,9 +251,9 @@ internal static class Program
             true);
 
         var charCount = GetEmbedCharacterCount(embed);
-        Console.WriteLine($"Embed character count: {charCount}");
+        WriteLineWithPretext($"Embed character count: {charCount}");
 
-        if (charCount > 6000) Console.WriteLine("⚠️ Embed exceeds the 6000 character limit!");
+        if (charCount > 6000) WriteLineWithPretext("⚠️ Embed exceeds the 6000 character limit!", OutputType.Error);
 
         return embed.Build();
     }
