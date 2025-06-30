@@ -30,8 +30,6 @@ jobs:
     - name: Create Release Zip
       uses: thedoctor0/zip-release@master
       with:
-        type: 'zip'
-        path: './bin/Debug/net8.0'
         filename: 'Release.zip'
     - name: Create Release
       id: create_release
