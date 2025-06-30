@@ -32,7 +32,7 @@ jobs:
       uses: thedoctor0/zip-release@master
       with:
         filename: 'Release.zip'
-        directory: ${{steps.build.outputs.directory}} #'/home/runner/work/Pelican-Keeper/Pelican-Keeper/Pelican Keeper'
+        directory: '${{steps.build.outputs.directory}}/home/runner/work/Pelican-Keeper/Pelican-Keeper/Pelican Keeper' #'/home/runner/work/Pelican-Keeper/Pelican-Keeper/Pelican Keeper'
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
