@@ -28,7 +28,11 @@ jobs:
     - name: Test Build
       run: dotnet build --no-restore
     - name: Create Release Zip
-      run: dotnet pack --no-build --output ./bin/Debug/net8.0
+      uses: thedoctor0/zip-release@master
+      with:
+        type: 'zip'
+        path: './bin/Debug/net8.0'
+        filename: 'Release.zip'
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
