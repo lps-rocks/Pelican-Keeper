@@ -35,23 +35,28 @@ jobs:
           echo "valid=false" >> "$GITHUB_OUTPUT"
         fi
     - name: Setup .NET ${{ matrix.dotnet-version }}
+      if: steps.check_version.outputs.valid == 'true'
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
     
     - name: Restore dependencies
+      if: steps.check_version.outputs.valid == 'true'
       run: dotnet restore
     
     - name: Test Build
+      if: steps.check_version.outputs.valid == 'true'
       run: dotnet build --no-restore
     
     - name: Create Release Zip
+      if: steps.check_version.outputs.valid == 'true'
       uses: thedoctor0/zip-release@master
       with:
         filename: 'Release.zip'
         exclusions: '*.git* /*.idea/* *.md *.sln global.json LICENSE'
     
     - name: Create Release
+      if: steps.check_version.outputs.valid == 'true'
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -61,6 +66,7 @@ jobs:
         release_name: Release Pelican-Keeper-v${{ steps.get_commit.outputs.title }}
     
     - name: Upload Release Asset
+      if: steps.check_version.outputs.valid == 'true'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
