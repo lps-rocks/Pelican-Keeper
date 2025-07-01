@@ -84,7 +84,7 @@ dotnet run --project "Pelican Keeper"
 
 The config.json file can be found in the installatin folder and for the moment you have two options
 > [!WARNING]
-> The Paginate option is still being tested, so its not quite complete yet. Use at your own risk!
+> The Paginate option is still being tested, and may not work yet. Use at your own risk!
 
 ```
 {
