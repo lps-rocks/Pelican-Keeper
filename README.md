@@ -12,6 +12,10 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 > [!TIP]
 > This bot can be installed and run on the generic C# Egg on Pelican.
 
+### Currently being worked on
+- [ ] Finish adding Pagination
+- [ ] Add Joinable IP:Port to the displayed server information
+
 ## Setup in Pelican
 
 ### Setup Egg
