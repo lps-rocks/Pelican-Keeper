@@ -14,11 +14,11 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 
 ## Setup in Pelican
 
-**Setup Egg**
+### Setup Egg
 
 Setup the Generic C# egg in your Pelican Panel like normal.
 
-**Configuration**
+### Configuration
 
 Set the following variables exactly like this
 ```
@@ -27,7 +27,7 @@ Set the following variables exactly like this
 - Project Location: /home/container/Pelican Keeper/
 - Project File: "Pelican Keeper"
 ```
-**Secrets**
+### Secrets
 
 Run the bot once, or create the Secrets.json in the base directory you see when opening the Files tab, and fill out all the necessary information.
 
@@ -35,14 +35,14 @@ Run the bot once, or create the Secrets.json in the base directory you see when 
 > [!TIP]
 > You will need .NET 8.0 and curl installed.
 
-**Get The Latest Release**
+### Get The Latest Release
 
 Download the latest release with this command. This command downloads the latest release, unzips it, and removes the zip file.
 ```
 curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/Release.zip && unzip Release.zip && rm Release.zip
 ```
 
-**Do a Restore**
+### Do a Restore
 
 cd into the bot directory and run the restore command
 ```
@@ -50,7 +50,7 @@ cd Pelican Keeper/
 dotnet restore
 ```
 
-**Run the Bot**
+### Run the Bot
 > [!WARNING]
 > At this point you should create the Secrets.json in the bot directory, otherwise the first run will result in an error.
 > After the first run, the bot will have created the Secrets.json. At that point it's your responsibility to fill out with all the necessary information.
@@ -77,3 +77,29 @@ dotnet run --project "Pelican Keeper"
 }
 ```
 > The ExternalServerIP variable is optional and is used to display the server's public IP alongside the primary game server port. This provides a visible, joinable IP address as part of the server information.
+
+## Configuration
+
+**Config File**
+
+The config.json file can be found in the installatin folder and for the moment you have two options
+> [!WARNING]
+> The Paginate option is still being tested, so its not quite complete yet. Use at your own risk!
+
+```
+{
+  "ConsolidateEmbeds": true,
+  "Paginate": false
+}
+```
+### ConsolidateEmbeds
+
+> Consolidates all the server information into a single embed message if true. And if false, it will create embed message for each game server you have on pelican.
+> 
+> Note that you will run into discord rate limits if you have this option off and you have a few game servers on pelican.
+
+### Paginate
+
+> Paginates the server information into a single embed message with changable pages.
+> 
+> Note that the page will be the same serverwide, meaning if someone changed the page it changes it for you as well.
