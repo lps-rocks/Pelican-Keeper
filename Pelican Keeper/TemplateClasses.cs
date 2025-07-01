@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using DSharpPlus.Entities;
 
 namespace Pelican_Keeper;
 
@@ -11,11 +12,13 @@ public abstract class TemplateClasses
         public string? ServerUrl { get; set; }
         public string? BotToken { get; set; }
         public ulong ChannelId { get; set; }
+        public string? ExternalIp { get; set; }
     }
     
     public class Config
     {
         public bool ConsolidateEmbeds { get; set; }
+        public bool Paginate { get; set; }
     }
 
     public class ServerListResponse
@@ -39,7 +42,7 @@ public abstract class TemplateClasses
     public class ServerAttributes
     {
         public int Id { get; set; }
-        public string Uuid { get; set; }
+        public string? Uuid { get; set; }
         public string Name { get; set; }
     }
 
@@ -66,10 +69,30 @@ public abstract class TemplateClasses
 
         public long Uptime { get; set; }
     }
-
-    public class TrackedMessage
+    
+    public class LivePaginatedMessage
     {
-        public ulong ChannelId { get; set; }
-        public ulong MessageId { get; set; }
+        public List<DiscordEmbedBuilder> Pages { get; set; } = new();
+        public int CurrentPageIndex { get; set; } = 0;
+    }
+    
+    public class LiveMessageJsonStorage
+    {
+        public HashSet<ulong>? LiveStore { get; set; } = new();
+        public Dictionary<ulong, LivePaginatedMessage>? PaginatedLiveStore { get; set; } = new();
+    }
+
+    public enum OutputSortingDirection
+    {
+        Ascending,
+        Descending
+    }
+    
+    public enum OutputSortingType
+    {
+        None,
+        Id,
+        Status,
+        Name
     }
 }

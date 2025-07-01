@@ -39,11 +39,15 @@ public class HelperClass
         return response;
     }
 
-    internal static bool EmbedHasChanged(string uuid, DiscordEmbed newEmbed)
+    internal static bool EmbedHasChanged(List<string?> uuid, DiscordEmbed newEmbed)
     {
-        var hash = newEmbed.Description + string.Join(",", newEmbed.Fields.Select(f => f.Name + f.Value));
-        if (LastEmbedHashes.TryGetValue(uuid, out var lastHash) && lastHash == hash) return false;
-        LastEmbedHashes[uuid] = hash;
+        foreach (var uuidItem in uuid)
+        {
+            if (uuidItem == null) continue;
+            var hash = newEmbed.Description + string.Join(",", newEmbed.Fields.Select(f => f.Name + f.Value));
+            if (LastEmbedHashes.TryGetValue(uuidItem, out var lastHash) && lastHash == hash) return false;
+            LastEmbedHashes[uuidItem] = hash;
+        }
         return true;
     }
 

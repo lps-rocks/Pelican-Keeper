@@ -8,10 +8,10 @@ using static HelperClass;
 
 public static class PelicanInterface
 {
-    internal static StatsResponse? GetServerStats(string uuid)
+    internal static StatsResponse? GetServerStats(string? uuid)
     {
-        var client = new RestClient(Program.Secrets?.ServerUrl + "/api/client/servers/" + uuid + "/resources");
-        var response = CreateRequest(client, Program.Secrets?.ClientToken);
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/" + uuid + "/resources");
+        var response = CreateRequest(client, Program.Secrets.ClientToken);
 
         var options = new JsonSerializerOptions
         {
@@ -45,8 +45,8 @@ public static class PelicanInterface
 
     internal static ServerListResponse? GetServersList()
     {
-        var client = new RestClient(Program.Secrets?.ServerUrl + "/api/application/servers");
-        var response = CreateRequest(client, Program.Secrets?.ServerToken);
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/application/servers");
+        var response = CreateRequest(client, Program.Secrets.ServerToken);
 
         var options = new JsonSerializerOptions
         {
@@ -70,13 +70,9 @@ public static class PelicanInterface
         return null;
     }
 
-    internal static List<StatsResponse?> GetServerStatsList(List<string> uuids)
+    internal static List<StatsResponse?> GetServerStatsList(List<string?> uuids)
     {
-        List<StatsResponse?> stats = new List<StatsResponse?>();
-        foreach (var uuid in uuids)
-        {
-            stats.Add(GetServerStats(uuid));
-        }
+        List<StatsResponse?> stats = uuids.Select(GetServerStats).ToList();
         return stats.Where(s => s != null).ToList(); 
     }
 }

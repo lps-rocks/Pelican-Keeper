@@ -11,19 +11,30 @@ using static HelperClass;
 using static PelicanInterface;
 using static ConsoleExt;
 
+
+//TODO: Add a way to configure how the message should be sorted, e.g. by name, by status, etc.
+//TODO: Add an optional logging feature that sends a message to the target channel if a server is shutting down, starting, or has an error.
 internal static class Program
 {
-    private static DiscordChannel? _targetChannel;
-    public static Secrets? Secrets;
+    public static DiscordChannel? TargetChannel;
+    public static Secrets Secrets = null!;
     private static Config? _config;
 
     private static async Task Main()
     {
-        var secretsJson = await File.ReadAllTextAsync("Secrets.json");
-        Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson);
-        if (Secrets == null)
+        if (!File.Exists("Secrets.json"))
         {
-            WriteLineWithPretext("Failed to load secrets.", OutputType.Error);
+            WriteLineWithPretext("Secrets.json not found. Creating default one.", OutputType.Warning);
+            await using var _ = File.Create("Secrets.json");
+            var defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\n}");
+            await File.WriteAllTextAsync("Secrets.json", defaultSecrets);
+        }
+        
+        var secretsJson = await File.ReadAllTextAsync("Secrets.json");
+        Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
+        if (Secrets.BotToken == "YOUR_DISCORD_BOT_TOKEN")
+        {
+            WriteLineWithPretext("Failed to load secrets. Secrets not filled out. Check Secrets.json", OutputType.Error);
             return;
         }
         
@@ -43,7 +54,8 @@ internal static class Program
         });
 
         discord.Ready += OnClientReady;
-
+        discord.MessageDeleted += OnMessageDeleted;
+        
         await discord.ConnectAsync();
         await Task.Delay(-1);
     }
@@ -51,9 +63,21 @@ internal static class Program
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
         WriteLineWithPretext("Bot is connected and ready!");
-        _targetChannel = await sender.GetChannelAsync(Secrets!.ChannelId);
-        WriteLineWithPretext($"Target channel: {_targetChannel.Name}");
+        TargetChannel = await sender.GetChannelAsync(Secrets!.ChannelId);
+        WriteLineWithPretext($"Target channel: {TargetChannel.Name}");
         _ = StartStatsUpdater(sender, Secrets.ChannelId);
+    }
+    
+    private static Task OnMessageDeleted(DiscordClient sender, MessageDeleteEventArgs e)
+    {
+        if (e.Message.Channel.Id != Secrets!.ChannelId) return Task.CompletedTask;
+
+        var tracked = LiveMessageStorage.Get(e.Message.Id);
+        if (tracked == null) return Task.CompletedTask;
+
+        WriteLineWithPretext($"Message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
+        LiveMessageStorage.Remove(tracked);
+        return Task.CompletedTask;
     }
     
     private static async Task StartStatsUpdater(DiscordClient client, ulong channelId)
@@ -74,31 +98,27 @@ internal static class Program
                 while (true)
                 {
                     List<ServerResponse> serverResponses = servers.Data.ToList();
-                    var uuid = serverResponses[0].Attributes.Uuid;
+                    List<string?> uuids = serverResponses.Select(s => s.Attributes.Uuid).ToList();
                     
                     try
                     {
                         var embed = await BuildEmbed(serverResponses);
-                        var tracked = LiveMessageStorage.Get(uuid);
+                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.Last());
 
                         if (tracked != null)
                         {
-                            var msg = await channel.GetMessageAsync(tracked.MessageId);
-                            if (EmbedHasChanged(uuid, embed!)) await msg.ModifyAsync(embed);
+                            var msg = await channel.GetMessageAsync((ulong)tracked);
+                            if (EmbedHasChanged(uuids, embed)) await msg.ModifyAsync(embed);
                         }
                         else
                         {
                             var msg = await channel.SendMessageAsync(embed);
-                            LiveMessageStorage.Save(uuid, new TrackedMessage
-                            {
-                                ChannelId = channel.Id,
-                                MessageId = msg.Id
-                            });
+                            LiveMessageStorage.Save(msg.Id);
                         }
                     }
                     catch (Exception ex)
                     {
-                        WriteLineWithPretext($"Updater error for {uuid}: {ex.Message}", OutputType.Warning);
+                        WriteLineWithPretext($"Updater error for {uuids}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted
                     }
                     
                     await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
@@ -106,6 +126,59 @@ internal static class Program
                 // ReSharper disable once FunctionNeverReturns
             });
         }
+
+        if (_config.Paginate)
+        {
+            _ = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    List<ServerResponse> serverResponses = servers.Data.ToList();
+                    List<string?> uuids = serverResponses.Select(s => s.Attributes.Uuid).ToList();
+
+                    try
+                    {
+                        List<DiscordEmbedBuilder> embeds = await BuildPaginatedEmbeds(serverResponses);
+
+                        if (LiveMessageStorage.Cache is { PaginatedLiveStore: not null })
+                        {
+                            LivePaginatedMessage? pagedTracked = LiveMessageStorage.GetPaginated(LiveMessageStorage.Cache.PaginatedLiveStore.Last().Key);
+
+                            if (pagedTracked != null)
+                            {
+                                var msg = await channel.GetMessageAsync(LiveMessageStorage.Cache.PaginatedLiveStore.Last().Key);
+
+                                var newEmbed = embeds[pagedTracked.CurrentPageIndex];
+                                if (EmbedHasChanged(uuids, newEmbed))
+                                {
+                                    await msg.ModifyAsync(newEmbed.Build());
+                                    pagedTracked.Pages[pagedTracked.CurrentPageIndex] = newEmbed;
+                                }
+                            }
+                            else
+                            {
+                                var msg = await channel.SendMessageAsync(embeds[0].Build());
+
+                                LiveMessageStorage.Save(msg.Id, new LivePaginatedMessage
+                                {
+                                    Pages = embeds,
+                                    CurrentPageIndex = 0
+                                });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteLineWithPretext($"Updater error for {uuids}: {ex.Message}", OutputType.Warning);
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
+                }
+                // ReSharper disable once FunctionNeverReturns
+            });
+
+        }
+        
         else
         {
             foreach (var server in servers.Data)
@@ -113,28 +186,24 @@ internal static class Program
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 3000)));
-                    var uuid = server.Attributes.Uuid;
+                    List<string?> uuid = [server.Attributes.Uuid];
 
                     while (true)
                     {
                         try
                         {
                             var embed = await BuildEmbed(server);
-                            var tracked = LiveMessageStorage.Get(uuid);
+                            var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.Last().Key);
 
                             if (tracked != null)
                             {
-                                var msg = await channel.GetMessageAsync(tracked.MessageId);
+                                var msg = await channel.GetMessageAsync((ulong)tracked);
                                 if (EmbedHasChanged(uuid, embed!)) await msg.ModifyAsync(embed);
                             }
                             else
                             {
                                 var msg = await channel.SendMessageAsync(embed);
-                                LiveMessageStorage.Save(uuid, new TrackedMessage
-                                {
-                                    ChannelId = channel.Id,
-                                    MessageId = msg.Id
-                                });
+                                LiveMessageStorage.Save(msg.Id);
                             }
                         }
                         catch (Exception ex)
@@ -149,10 +218,37 @@ internal static class Program
             }
         }
     }
+
+    static Task<List<DiscordEmbedBuilder>> BuildPaginatedEmbeds(List<ServerResponse> servers)
+    {
+        const int serversPerPage = 5;
+        List<DiscordEmbedBuilder> pages = new();
+
+        for (int i = 0; i < servers.Count; i += serversPerPage)
+        {
+            var pageServers = servers.Skip(i).Take(serversPerPage);
+
+            var embed = new DiscordEmbedBuilder
+            {
+                Title = $"📄 Server Page {pages.Count + 1}",
+                Color = DiscordColor.Azure
+            };
+
+            foreach (var server in pageServers)
+            {
+                embed.AddField($"🎮 {server.Attributes.Name}", "Summary goes here...", inline: false); // Placeholder for summary
+            }
+
+            pages.Add(embed);
+        }
+
+        return Task.FromResult(pages);
+    }
+
     
     private static Task<DiscordEmbed> BuildEmbed(List<ServerResponse> servers)
     {
-        List<string> uuids = servers.Select(s => s.Attributes.Uuid).ToList();
+        List<string?> uuids = servers.Select(s => s.Attributes.Uuid).ToList();
         List<StatsResponse?> statsResponses = GetServerStatsList(uuids);
             
         var embed = new DiscordEmbedBuilder
@@ -177,10 +273,10 @@ internal static class Program
                 "running" => "🟢",
                 _ => "⚪" // Unknown or initializing
             };
-            string memory = stats?.Attributes?.Resources?.MemoryBytes is long mem
+            string memory = stats?.Attributes?.Resources?.MemoryBytes is { } mem
                 ? $"{mem / (1024 * 1024):N0} MB"
                 : "N/A";
-            string cpu = stats?.Attributes?.Resources?.CpuAbsolute is double cpuAbs
+            string cpu = stats?.Attributes?.Resources?.CpuAbsolute is { } cpuAbs
                 ? $"{cpuAbs:0.00}%"
                 : "N/A";
             string disk = FormatBytes(stats?.Attributes?.Resources?.DiskBytes ?? 0);
@@ -195,7 +291,7 @@ internal static class Program
                              $"💽 **Disk:** {disk}\n" +
                              $"📥 **Network RX:** {networkRx}\n" +
                              $"📤 **Network TX:** {networkTx}\n" +
-                             $"⏳ **Uptime:** {uptime}";
+                             $"⏳ **Uptime:** {uptime}"; // Add Server IP and port if available and configured
 
             embed.AddField($"🎮 {name}", summary, inline: true);
             
@@ -217,7 +313,7 @@ internal static class Program
         var stats = GetServerStats(server.Attributes.Uuid);
         if (stats == null)
         {
-            await _targetChannel!.SendMessageAsync("Failed to retrieve server stats information.");
+            await TargetChannel!.SendMessageAsync("Failed to retrieve server stats information.");
             return null;
         }
 
@@ -237,17 +333,21 @@ internal static class Program
 
             builder.AddField(name, value, inline);
         }
+        
+        string statusIcon = stats.Attributes.CurrentState.ToLower() switch
+        {
+            "offline" => "🔴",
+            "running" => "🟢",
+            _ => "⚪" // Unknown or initializing
+        };
 
-        embed.AddField("Server ID", server.Attributes.Id.ToString(), true);
-        embed.AddField("UUID", $"`{server.Attributes.Uuid}`");
-
-        SafeAddField(embed, "Status", stats.Attributes.CurrentState, true);
-        SafeAddField(embed, "Memory", $"{FormatBytes(stats.Attributes.Resources.MemoryBytes)}", true);
-        SafeAddField(embed, "CPU", $"{stats.Attributes.Resources.CpuAbsolute:0.00}%", true);
-        SafeAddField(embed, "Disk", $"{FormatBytes(stats.Attributes.Resources.DiskBytes)}", true);
-        SafeAddField(embed, "Network RX", $"{FormatBytes(stats.Attributes.Resources.NetworkRxBytes)}", true);
-        SafeAddField(embed, "Network TX", $"{FormatBytes(stats.Attributes.Resources.NetworkTxBytes)}", true);
-        SafeAddField(embed, "Uptime", $"{FormatUptime(stats.Attributes.Resources.Uptime)}",
+        SafeAddField(embed, $"{statusIcon} **Status** ", stats.Attributes.CurrentState, true);
+        SafeAddField(embed, "🧠 **Memory:** ", $"{FormatBytes(stats.Attributes.Resources.MemoryBytes)}", true);
+        SafeAddField(embed, "🖥️ **CPU:** ", $"{stats.Attributes.Resources.CpuAbsolute:0.00}%", true);
+        SafeAddField(embed, "💽 **Disk:** ", $"{FormatBytes(stats.Attributes.Resources.DiskBytes)}", true);
+        SafeAddField(embed, "📥 **Network RX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkRxBytes)}", true);
+        SafeAddField(embed, "📤 **Network TX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkTxBytes)}", true);
+        SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats.Attributes.Resources.Uptime)}",
             true);
 
         var charCount = GetEmbedCharacterCount(embed);

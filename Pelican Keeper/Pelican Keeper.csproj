@@ -12,6 +12,7 @@
         <PackageReference Include="DSharpPlus" Version="4.5.1"/>
         <PackageReference Include="DSharpPlus.Interactivity" Version="4.5.1" />
         <PackageReference Include="RestSharp" Version="112.1.0"/>
+        <PackageReference Include="System.Linq.Async" Version="6.0.3" />
     </ItemGroup>
 
     <ItemGroup>
@@ -24,6 +25,12 @@
         <None Update="Config.json">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.github\workflows\dotnet.yml">
+        <Link>dotnet.yml</Link>
+      </Content>
     </ItemGroup>
 
 </Project>
