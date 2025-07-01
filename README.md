@@ -84,7 +84,7 @@ dotnet run --project "Pelican Keeper"
 
 ## Configuration
 
-**Config File**
+### Config File
 
 The config.json file can be found in the installatin folder and for the moment you have two options
 > [!WARNING]
