@@ -20,27 +20,46 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Get last commit message
+      id: get_commit
+      run: |
+        TITLE=$(git log -1 --pretty=%s)
+        echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+
+    - name: Check if commit is version tag (X.Y.Z)
+      id: check_version
+      run: |
+        if [[ "${{ steps.get_commit.outputs.title }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "valid=false" >> "$GITHUB_OUTPUT"
+        fi
     - name: Setup .NET ${{ matrix.dotnet-version }}
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
+    
     - name: Restore dependencies
       run: dotnet restore
+    
     - name: Test Build
       run: dotnet build --no-restore
+    
     - name: Create Release Zip
       uses: thedoctor0/zip-release@master
       with:
         filename: 'Release.zip'
-        exclusions: '*.git* /*.idea/* *.md'
+        exclusions: '*.git* /*.idea/* *.md *.sln global.json LICENSE'
+    
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: Pelican-Keeper-v${{ github.run_number }}
-        release_name: Release Pelican-Keeper-v${{ github.run_number }}
+        tag_name: Pelican-Keeper-v$${{ steps.get_message.outputs.title }}
+        release_name: Release Pelican-Keeper-v${{ steps.get_message.outputs.title }}
+    
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -48,5 +67,5 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./Release.zip
-        asset_name: Release-v${{ github.run_number }}.zip
+        asset_name: Release.zip
         asset_content_type: application/zip

@@ -26,7 +26,7 @@ internal static class Program
         {
             WriteLineWithPretext("Secrets.json not found. Creating default one.", OutputType.Warning);
             await using var _ = File.Create("Secrets.json");
-            var defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\n}");
+            var defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": \"THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\",\n  \"ExternalServerIP\": \"YOUR_EXTERNAL_SERVER_IP\"\n}");
             await File.WriteAllTextAsync("Secrets.json", defaultSecrets);
         }
         
