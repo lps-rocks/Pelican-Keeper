@@ -63,7 +63,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: Pelican-Keeper-v$${{ steps.get_commit.outputs.title }}
-        release_name: Release Pelican-Keeper-v${{ steps.get_commit.outputs.title }}
+        release_name: Pelican-Keeper-v${{ steps.get_commit.outputs.title }}
     
     - name: Upload Release Asset
       if: steps.check_version.outputs.valid == 'true'
