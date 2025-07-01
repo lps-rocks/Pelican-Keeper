@@ -12,17 +12,38 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 > [!TIP]
 > This bot can be installed and run on the generic C# Egg on Pelican.
 
-## Setup
+## Setup in Pelican
+
+**Setup Egg**
+
+Setup the Generic C# egg in your Pelican Panel like normal.
+
+**Configuration**
+
+Set the following variables exactly like this
+```
+- Git Repo Address: https://github.com/SirZeeno/Pelican-Keeper
+- Install Branch: main
+- Project Location: /home/container/Pelican Keeper/
+- Project File: "Pelican Keeper"
+```
+**Secrets**
+
+Run the bot once, or create the Secrets.json in the base directory you see when opening the Files tab, and fill out all the necessary information.
+
+## Setup Outside of Pelican
 > [!TIP]
 > You will need .NET 8.0 and curl installed.
 
 **Get The Latest Release**
-Download the latest release, unzips it
+
+Download the latest release with this command. This command downloads the latest release, unzips it, and removes the zip file.
 ```
-curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/Release.zip && unzip Release.zip
+curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/Release.zip && unzip Release.zip && rm Release.zip
 ```
 
 **Do a Restore**
+
 cd into the bot directory and run the restore command
 ```
 cd Pelican Keeper/
