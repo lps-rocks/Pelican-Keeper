@@ -118,7 +118,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        WriteLineWithPretext($"Updater error for {uuids}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted
+                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted
                     }
                     
                     await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
@@ -169,7 +169,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        WriteLineWithPretext($"Updater error for {uuids}: {ex.Message}", OutputType.Warning);
+                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning);
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
