@@ -99,28 +99,30 @@ internal static class Program
                 {
                     List<ServerResponse> serverResponses = servers.Data.ToList();
                     List<string?> uuids = serverResponses.Select(s => s.Attributes.Uuid).ToList();
-                    
+
                     try
                     {
                         var embed = await BuildEmbed(serverResponses);
-                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.Last());
+                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault());
 
                         if (tracked != null)
                         {
+                            WriteLineWithPretext("Message exists, updating...");
                             var msg = await channel.GetMessageAsync((ulong)tracked);
                             if (EmbedHasChanged(uuids, embed)) await msg.ModifyAsync(embed);
                         }
                         else
                         {
+                            WriteLineWithPretext("Message does not exists, sending new one...");
                             var msg = await channel.SendMessageAsync(embed);
                             LiveMessageStorage.Save(msg.Id);
                         }
                     }
                     catch (Exception ex)
                     {
-                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted
+                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted, and be more specific whats going wrong
                     }
-                    
+
                     await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
                 }
                 // ReSharper disable once FunctionNeverReturns
@@ -142,7 +144,7 @@ internal static class Program
 
                         if (LiveMessageStorage.Cache is { PaginatedLiveStore: not null })
                         {
-                            LivePaginatedMessage? pagedTracked = LiveMessageStorage.GetPaginated(LiveMessageStorage.Cache.PaginatedLiveStore.Last().Key);
+                            LivePaginatedMessage? pagedTracked = LiveMessageStorage.GetPaginated(LiveMessageStorage.Cache.PaginatedLiveStore.LastOrDefault().Key);
 
                             if (pagedTracked != null)
                             {
@@ -179,7 +181,7 @@ internal static class Program
 
         }
         
-        else
+        if (_config is { ConsolidateEmbeds: false, Paginate: false })
         {
             foreach (var server in servers.Data)
             {
@@ -193,7 +195,7 @@ internal static class Program
                         try
                         {
                             var embed = await BuildEmbed(server);
-                            var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.Last().Key);
+                            var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.LastOrDefault().Key);
 
                             if (tracked != null)
                             {

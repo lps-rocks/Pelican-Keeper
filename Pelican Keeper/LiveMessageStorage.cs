@@ -32,8 +32,7 @@ public static class LiveMessageStorage
         try
         {
             var json = File.ReadAllText(FilePath);
-            Cache = JsonSerializer.Deserialize<LiveMessageJsonStorage>(json) ??
-                     new LiveMessageJsonStorage();
+            Cache = JsonSerializer.Deserialize<LiveMessageJsonStorage>(json) ?? new LiveMessageJsonStorage();
         }
         catch (Exception ex)
         {
