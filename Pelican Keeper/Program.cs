@@ -28,11 +28,16 @@ internal static class Program
             await using var _ = File.Create("Secrets.json");
             var defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": \"THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\",\n  \"ExternalServerIP\": \"YOUR_EXTERNAL_SERVER_IP\"\n}");
             await File.WriteAllTextAsync("Secrets.json", defaultSecrets);
+            WriteLineWithPretext("Created default Secrets.json. Please fill out the values.", OutputType.Warning);
+            return;
         }
         
-        var secretsJson = await File.ReadAllTextAsync("Secrets.json");
-        Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
-        if (Secrets.BotToken == "YOUR_DISCORD_BOT_TOKEN")
+        try
+        {
+            var secretsJson = await File.ReadAllTextAsync("Secrets.json");
+            Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
+        }
+        catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load secrets. Secrets not filled out. Check Secrets.json", OutputType.Error);
             return;
