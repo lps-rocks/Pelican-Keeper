@@ -25,9 +25,17 @@ internal static class Program
         if (!File.Exists("Secrets.json"))
         {
             WriteLineWithPretext("Secrets.json not found. Creating default one.", OutputType.Warning);
-            await using var _ = File.Create("Secrets.json");
-            var defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": \"THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\",\n  \"ExternalServerIP\": \"YOUR_EXTERNAL_SERVER_IP\"\n}");
-            await File.WriteAllTextAsync("Secrets.json", defaultSecrets);
+            await using var secretsFile = File.Create("Secrets.json");
+            const string defaultSecrets = @"{
+                ""ClientToken"": ""YOUR_CLIENT_TOKEN"",
+                ""ServerToken"": ""YOUR_SERVER_TOKEN"",
+                ""ServerUrl"": ""YOUR_BASIC_SERVER_URL"",
+                ""BotToken"": ""YOUR_DISCORD_BOT_TOKEN"",
+                ""ChannelId"": ""THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN"",
+                ""ExternalServerIP"": ""YOUR_EXTERNAL_SERVER_IP""
+            }";
+            await using var writer = new StreamWriter(secretsFile);
+            await writer.WriteAsync(defaultSecrets);
             WriteLineWithPretext("Created default Secrets.json. Please fill out the values.", OutputType.Warning);
             return;
         }
@@ -41,6 +49,14 @@ internal static class Program
         {
             WriteLineWithPretext("Failed to load secrets. Secrets not filled out. Check Secrets.json", OutputType.Error);
             return;
+        }
+
+        if (!File.Exists("Config.json"))
+        {
+            await using var configFile = File.Create("Config.json");
+            var defaultConfig = new string("{\n  \"ConsolidateEmbeds\": true,\n  \"Paginate\": false\n}");
+            await using var writer = new StreamWriter(configFile);
+            await writer.WriteAsync(defaultConfig);
         }
         
         var configJson = await File.ReadAllTextAsync("Config.json");
