@@ -8,7 +8,7 @@ using static ConsoleExt;
 
 public static class LiveMessageStorage
 {
-    private const string FilePath = "MessageHistory.json";
+    private const string HistoryFilePath = "MessageHistory.json";
 
     internal static LiveMessageJsonStorage? Cache = new();
 
@@ -23,7 +23,7 @@ public static class LiveMessageStorage
 
     private static void LoadAll()
     {
-        if (!File.Exists(FilePath))
+        if (!File.Exists(HistoryFilePath))
         {
             WriteLineWithPretext("MessageHistory.json not found. Creating default one.", OutputType.Warning);
             using var file = File.Create("MessageHistory.json");
@@ -33,7 +33,7 @@ public static class LiveMessageStorage
 
         try
         {
-            var json = File.ReadAllText(FilePath);
+            var json = File.ReadAllText(HistoryFilePath);
             Cache = JsonSerializer.Deserialize<LiveMessageJsonStorage>(json) ?? new LiveMessageJsonStorage();
         }
         catch (Exception ex)
@@ -46,7 +46,7 @@ public static class LiveMessageStorage
     public static void Save(ulong messageId)
     {
         Cache?.LiveStore?.Add(messageId);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
+        File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
             WriteIndented = true
         }));
@@ -62,7 +62,7 @@ public static class LiveMessageStorage
         {
             Cache?.PaginatedLiveStore?.Add(messageId, msg);
         }
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
+        File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
             WriteIndented = true
         }));
@@ -72,7 +72,7 @@ public static class LiveMessageStorage
     {
         if (Cache != null && messageId != null && Cache.LiveStore != null && Cache.LiveStore.Remove((ulong)messageId))
         {
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
+            File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
             {
                 WriteIndented = true
             }));
@@ -90,7 +90,7 @@ public static class LiveMessageStorage
             Cache.LiveStore = filtered;
         }
 
-        await File.WriteAllTextAsync(FilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
+        await File.WriteAllTextAsync(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
             WriteIndented = true
         }));
@@ -113,6 +113,7 @@ public static class LiveMessageStorage
 
     public static ulong? Get(ulong? messageId)
     {
-        return Cache?.LiveStore?.FirstOrDefault(x => x == messageId);
+        if (Cache?.LiveStore == null || Cache.LiveStore.Count == 0 || messageId == null) return null;
+        return Cache.LiveStore?.First(x => x == messageId);
     }
 }
