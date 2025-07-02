@@ -89,6 +89,14 @@ public static class LiveMessageStorage
                 .ToHashSetAsync();
             Cache.LiveStore = filtered;
         }
+        
+        if (Cache is { PaginatedLiveStore: not null })
+        {
+            var filtered = await Cache.PaginatedLiveStore
+                .ToAsyncEnumerable()
+                .WhereAwait(async x => Program.TargetChannel != null && await MessageExistsAsync(Program.TargetChannel, x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value);
+            Cache.PaginatedLiveStore = filtered;
+        }
 
         await File.WriteAllTextAsync(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {

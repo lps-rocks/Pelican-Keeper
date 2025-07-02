@@ -2,7 +2,6 @@
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
-using DSharpPlus.Interactivity; //TODO: Add Pagination
 
 namespace Pelican_Keeper;
 
@@ -64,7 +63,7 @@ internal static class Program
         {
             Token = Secrets.BotToken,
             TokenType = TokenType.Bot,
-            Intents = DiscordIntents.AllUnprivileged | DiscordIntents.MessageContents
+            Intents = DiscordIntents.AllUnprivileged | DiscordIntents.MessageContents,
         });
 
         discord.Ready += OnClientReady;
@@ -173,7 +172,7 @@ internal static class Program
                             }
                             else
                             {
-                                var msg = await channel.SendMessageAsync(embeds[0].Build());
+                                var msg = await SendPaginatedMessageAsync(client, channel, embeds);
 
                                 LiveMessageStorage.Save(msg.Id, new LivePaginatedMessage
                                 {
@@ -235,25 +234,96 @@ internal static class Program
         }
     }
 
+    private static async Task<DiscordMessage> SendPaginatedMessageAsync(DiscordClient client, DiscordChannel channel, List<DiscordEmbedBuilder> embeds)
+    {
+        int pageIndex = 0;
+
+        var message = await channel.SendMessageAsync(embed: embeds[pageIndex].Build());
+
+        var left = DiscordEmoji.FromUnicode("◀️");
+        var right = DiscordEmoji.FromUnicode("▶️");
+
+        await message.CreateReactionAsync(left);
+        await message.CreateReactionAsync(right);
+
+        var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+
+        async Task ReactionHandler(DiscordClient _, MessageReactionAddEventArgs e)
+        {
+            if (e.Message.Id != message.Id || e.User.IsBot) return;
+
+            if (e.Emoji == right)
+                pageIndex = (pageIndex + 1) % embeds.Count;
+            else if (e.Emoji == left)
+                pageIndex = (pageIndex - 1 + embeds.Count) % embeds.Count;
+            else
+                return;
+
+            await message.ModifyAsync(embed: embeds[pageIndex].Build());
+            await message.DeleteReactionAsync(e.Emoji, e.User);
+        }
+
+        client.MessageReactionAdded += ReactionHandler;
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(2), cancellation.Token);
+        }
+        catch (TaskCanceledException) { }
+
+        client.MessageReactionAdded -= ReactionHandler;
+
+        // Optional cleanup after timeout
+        await message.DeleteAllReactionsAsync();
+
+        return message;
+    }
+
     static Task<List<DiscordEmbedBuilder>> BuildPaginatedEmbeds(List<ServerResponse> servers)
     {
-        const int serversPerPage = 5;
         List<DiscordEmbedBuilder> pages = new();
+        List<string?> uuids = servers.Select(s => s.Attributes.Uuid).ToList();
+        List<StatsResponse?> statsResponses = GetServerStatsList(uuids);
 
-        for (int i = 0; i < servers.Count; i += serversPerPage)
+        for (int i = 0; i < servers.Count; i++)
         {
-            var pageServers = servers.Skip(i).Take(serversPerPage);
+            var server = servers[i];
+            var stats = statsResponses.ElementAtOrDefault(i);
 
             var embed = new DiscordEmbedBuilder
             {
-                Title = $"📄 Server Page {pages.Count + 1}",
-                Color = DiscordColor.Azure
+                Title = $"🎮 {server.Attributes.Name}",
+                Color = DiscordColor.Azure,
+            };
+            
+            void SafeAddField(DiscordEmbedBuilder builder, string name, string? value, bool inline = false)
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    builder.AddField(name, "N/A", inline);
+                    return;
+                }
+
+                builder.AddField(name, value, inline);
+            }
+        
+            string statusIcon = stats?.Attributes.CurrentState.ToLower() switch
+            {
+                "offline" => "🔴",
+                "running" => "🟢",
+                _ => "⚪" // Unknown or initializing
             };
 
-            foreach (var server in pageServers)
-            {
-                embed.AddField($"🎮 {server.Attributes.Name}", "Summary goes here...", inline: false); // Placeholder for summary
-            }
+            SafeAddField(embed, $"{statusIcon} **Status** ", stats?.Attributes.CurrentState, true);
+            SafeAddField(embed, "🧠 **Memory:** ", $"{FormatBytes(stats?.Attributes.Resources.MemoryBytes ?? 0)}", true);
+            SafeAddField(embed, "🖥️ **CPU:** ", $"{stats?.Attributes.Resources.CpuAbsolute:0.00}%", true);
+            SafeAddField(embed, "💽 **Disk:** ", $"{FormatBytes(stats?.Attributes.Resources.DiskBytes ?? 0)}", true);
+            SafeAddField(embed, "📥 **Network RX:** ", $"{FormatBytes(stats?.Attributes.Resources.NetworkRxBytes ?? 0)}", true);
+            SafeAddField(embed, "📤 **Network TX:** ", $"{FormatBytes(stats?.Attributes.Resources.NetworkTxBytes ?? 0)}", true);
+            SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats?.Attributes.Resources.Uptime ?? 0)}", true);
+
+            var charCount = GetEmbedCharacterCount(embed);
+            WriteLineWithPretext($"Embed character count: {charCount}");
 
             pages.Add(embed);
         }
@@ -313,7 +383,7 @@ internal static class Program
             
             if (embed.Fields.Count < 25) continue;
             WriteLineWithPretext("reached embed limit of 25 fields", OutputType.Error);
-            break; // prevent Discord embed limit
+            break; // prevents Discord embed limit
         }
         
         var charCount = GetEmbedCharacterCount(embed);
@@ -363,8 +433,7 @@ internal static class Program
         SafeAddField(embed, "💽 **Disk:** ", $"{FormatBytes(stats.Attributes.Resources.DiskBytes)}", true);
         SafeAddField(embed, "📥 **Network RX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkRxBytes)}", true);
         SafeAddField(embed, "📤 **Network TX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkTxBytes)}", true);
-        SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats.Attributes.Resources.Uptime)}",
-            true);
+        SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats.Attributes.Resources.Uptime)}", true);
 
         var charCount = GetEmbedCharacterCount(embed);
         WriteLineWithPretext($"Embed character count: {charCount}");
