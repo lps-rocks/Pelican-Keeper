@@ -26,7 +26,9 @@ public static class LiveMessageStorage
         if (!File.Exists(FilePath))
         {
             WriteLineWithPretext("MessageHistory.json not found. Creating default one.", OutputType.Warning);
-            File.Create("MessageHistory.json").Close();
+            using var file = File.Create("MessageHistory.json");
+            using var writer = new StreamWriter(file);
+            writer.Write(JsonSerializer.Serialize(new LiveMessageJsonStorage()));
         }
 
         try
