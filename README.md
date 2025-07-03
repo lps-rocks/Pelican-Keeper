@@ -102,8 +102,12 @@ The config.json file can be found in the installatin folder and for the moment y
 > 
 > Note that you will run into discord rate limits if you have this option off and you have a few game servers on pelican.
 
+![image](https://github.com/user-attachments/assets/9ec54b8d-48fa-424c-acd3-5bb12222f2ef)
+
 ### Paginate
 
 > Paginates the server information into a single embed message with changable pages.
 > 
 > Note that the page will be the same serverwide, meaning if someone changed the page it changes it for you as well.
+
+![image](https://github.com/user-attachments/assets/014e086a-506d-4680-a334-5b035572edf9)
