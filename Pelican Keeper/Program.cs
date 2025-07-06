@@ -2,6 +2,7 @@
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Exceptions;
 
 namespace Pelican_Keeper;
 
@@ -17,7 +18,17 @@ internal static class Program
 {
     public static DiscordChannel? TargetChannel;
     public static Secrets Secrets = null!;
-    private static Config? _config;
+    private static Config _config = null!;
+    private static readonly EmbedBuilderService EmbedService = new();
+    private static List<DiscordEmbed> _pages = null!;
+
+    private enum EmbedUpdateMode
+    {
+        Consolidated,
+        Paginated,
+        PerServer
+    }
+
 
     private static async Task Main()
     {
@@ -37,7 +48,7 @@ internal static class Program
             var secretsJson = await File.ReadAllTextAsync("Secrets.json");
             Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             WriteLineWithPretext("Failed to load secrets. Secrets not filled out. Check Secrets.json", OutputType.Error);
             return;
@@ -52,11 +63,15 @@ internal static class Program
         }
         
         var configJson = await File.ReadAllTextAsync("Config.json");
-        _config = JsonSerializer.Deserialize<Config>(configJson);
-        if (_config == null)
+        var config = JsonSerializer.Deserialize<Config>(configJson);
+        if (config == null)
         {
             WriteLineWithPretext("Failed to load config.", OutputType.Error);
             return;
+        }
+        else
+        {
+            _config = config;
         }
 
         var discord = new DiscordClient(new DiscordConfiguration
@@ -68,28 +83,97 @@ internal static class Program
 
         discord.Ready += OnClientReady;
         discord.MessageDeleted += OnMessageDeleted;
+        discord.ComponentInteractionCreated += OnComponentInteractionCreated;
         
         await discord.ConnectAsync();
         await Task.Delay(-1);
     }
 
+    private static async Task<Task> OnComponentInteractionCreated(DiscordClient sender, ComponentInteractionCreateEventArgs e)
+    {
+        if (LiveMessageStorage.GetPaginated(e.Message.Id) is not { } pagedTracked || e.User.IsBot)
+        {
+            WriteLineWithPretext("User is Bot or is not tracked message ID is null.", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+
+        int index = pagedTracked;
+
+        switch (e.Id)
+        {
+            case "next_page":
+                index = (index + 1) % _pages.Count;
+                break;
+            case "prev_page":
+                index = (index - 1 + _pages.Count) % _pages.Count;
+                break;
+            default:
+                WriteLineWithPretext("Unknown interaction ID: " + e.Id, OutputType.Warning);
+                return Task.CompletedTask;
+        }
+
+        LiveMessageStorage.Save(e.Message.Id, index);
+                
+        if (_pages.Count == 0 || pagedTracked >= _pages.Count)
+        {
+            WriteLineWithPretext("No pages to show or page index out of range", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
+                new DiscordInteractionResponseBuilder()
+                    .AddEmbed(_pages[index])
+                    .AddComponents(
+                        new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
+                        new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
+                    )
+            );
+        }
+        catch (NotFoundException nf)
+        {
+            Console.WriteLine("❌ Interaction expired or already responded to. Skipping. " + nf.Message);
+        }
+        catch (BadRequestException br)
+        {
+            Console.WriteLine("❌ Bad request during interaction: " + br.JsonMessage);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("⚠️ Unexpected error during component interaction: " + ex.Message);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
         WriteLineWithPretext("Bot is connected and ready!");
-        TargetChannel = await sender.GetChannelAsync(Secrets!.ChannelId);
+        TargetChannel = await sender.GetChannelAsync(Secrets.ChannelId);
         WriteLineWithPretext($"Target channel: {TargetChannel.Name}");
         _ = StartStatsUpdater(sender, Secrets.ChannelId);
     }
     
     private static Task OnMessageDeleted(DiscordClient sender, MessageDeleteEventArgs e)
     {
-        if (e.Message.Channel.Id != Secrets!.ChannelId) return Task.CompletedTask;
+        if (e.Message.Channel.Id != Secrets.ChannelId) return Task.CompletedTask;
 
-        var tracked = LiveMessageStorage.Get(e.Message.Id);
-        if (tracked == null) return Task.CompletedTask;
-
-        WriteLineWithPretext($"Message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
-        LiveMessageStorage.Remove(tracked);
+        var liveMessageTracked = LiveMessageStorage.Get(e.Message.Id);
+        if (liveMessageTracked != null)
+        {
+            WriteLineWithPretext($"Message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
+            LiveMessageStorage.Remove(liveMessageTracked);
+        }
+        else if (liveMessageTracked == null)
+        {
+            var paginatedMessageTracked = LiveMessageStorage.GetPaginated(e.Message.Id);
+            if (paginatedMessageTracked != null)
+            {
+                WriteLineWithPretext($"Paginated message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
+                LiveMessageStorage.Remove(e.Message.Id);
+            }
+        }
         return Task.CompletedTask;
     }
     
@@ -103,343 +187,165 @@ internal static class Program
             WriteLineWithPretext("No servers found.");
             return;
         }
-
-        if (_config!.ConsolidateEmbeds)
+        
+        if (_config.ConsolidateEmbeds)
         {
-            _ = Task.Run(async () =>
-            {
-                while (true)
+            StartEmbedUpdaterLoop(
+                EmbedUpdateMode.Consolidated,
+                async () =>
                 {
-                    List<ServerResponse> serverResponses = servers.Data.ToList();
-                    List<string?> uuids = serverResponses.Select(s => s.Attributes.Uuid).ToList();
+                    var serversList = servers.Data.ToList();
+                    var uuids = serversList.Select(s => s.Attributes.Uuid).ToList();
+                    var stats = GetServerStatsList(uuids);
+                    var embed = await EmbedService.BuildMultiServerEmbed(serversList, stats);
+                    return (uuids, embed);
+                },
+                async (embedObj, uuids) =>
+                {
+                    var embed = (DiscordEmbed)embedObj;
+                    var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault());
 
-                    try
+                    if (tracked != null)
                     {
-                        var embed = await BuildEmbed(serverResponses);
-                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault());
+                        WriteLineWithPretext($"Updating message {tracked}");
+                        var msg = await channel.GetMessageAsync((ulong)tracked);
+                        if (EmbedHasChanged(uuids, embed))
+                            await msg.ModifyAsync(embed);
+                    }
+                    else
+                    {
+                        var msg = await channel.SendMessageAsync(embed);
+                        LiveMessageStorage.Save(msg.Id);
+                    }
+                });
+        }
+        
+        if (_config.Paginate)
+        {
+            StartEmbedUpdaterLoop(
+                EmbedUpdateMode.Paginated,
+                async () =>
+                {
+                    var serversList = servers.Data.ToList();
+                    var uuids = serversList.Select(s => s.Attributes.Uuid).ToList();
+                    var stats = GetServerStatsList(uuids);
+                    var embeds = await EmbedService.BuildPaginatedServerEmbeds(serversList, stats);
+                    return (uuids, embeds);
+                },
+                async (embedObj, uuids) =>
+                {
+                    var embeds = (List<DiscordEmbed>)embedObj;
 
-                        if (tracked != null)
+                    if (LiveMessageStorage.Cache is { PaginatedLiveStore: not null })
+                    {
+                        var cacheEntry = LiveMessageStorage.Cache.PaginatedLiveStore.LastOrDefault();
+
+                        var pagedTracked = LiveMessageStorage.GetPaginated(cacheEntry.Key);
+                        if (pagedTracked != null)
                         {
-                            WriteLineWithPretext("Message exists, updating...");
-                            var msg = await channel.GetMessageAsync((ulong)tracked);
-                            if (EmbedHasChanged(uuids, embed)) await msg.ModifyAsync(embed);
+                            // Update the stored pages with the new embeds
+                            _pages = embeds;
+
+                            // Keep the current page index (don't reset to 0)
+                            var currentIndex = pagedTracked.Value;
+                            var updatedEmbed = embeds[currentIndex];
+
+                            WriteLineWithPretext($"Updating message {cacheEntry.Key} on page {currentIndex}");
+                            var msg = await channel.GetMessageAsync(cacheEntry.Key);
+
+                            if (EmbedHasChanged(uuids, updatedEmbed))
+                            {
+                                await msg.ModifyAsync(updatedEmbed);
+                            }
                         }
                         else
                         {
-                            WriteLineWithPretext("Message does not exists, sending new one...");
-                            var msg = await channel.SendMessageAsync(embed);
-                            LiveMessageStorage.Save(msg.Id);
+                            // No tracked message yet → send a new one
+                            var msg = await SendPaginatedMessageAsync(channel, embeds);
+
+                            LiveMessageStorage.Save(msg.Id, 0);
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning); //TODO: Rework this to add a new entry if the last message was deleted, and be more specific whats going wrong
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
-                }
-                // ReSharper disable once FunctionNeverReturns
-            });
-        }
-
-        if (_config.Paginate)
-        {
-            _ = Task.Run(async () =>
-            {
-                while (true)
-                {
-                    List<ServerResponse> serverResponses = servers.Data.ToList();
-                    List<string?> uuids = serverResponses.Select(s => s.Attributes.Uuid).ToList();
-
-                    try
-                    {
-                        List<DiscordEmbedBuilder> embeds = await BuildPaginatedEmbeds(serverResponses);
-
-                        if (LiveMessageStorage.Cache is { PaginatedLiveStore: not null })
-                        {
-                            LivePaginatedMessage? pagedTracked = LiveMessageStorage.GetPaginated(LiveMessageStorage.Cache.PaginatedLiveStore.LastOrDefault().Key);
-
-                            if (pagedTracked != null)
-                            {
-                                var msg = await channel.GetMessageAsync(LiveMessageStorage.Cache.PaginatedLiveStore.Last().Key);
-
-                                var newEmbed = embeds[pagedTracked.CurrentPageIndex];
-                                if (EmbedHasChanged(uuids, newEmbed))
-                                {
-                                    await msg.ModifyAsync(newEmbed.Build());
-                                    pagedTracked.Pages[pagedTracked.CurrentPageIndex] = newEmbed;
-                                }
-                            }
-                            else
-                            {
-                                var msg = await SendPaginatedMessageAsync(client, channel, embeds);
-
-                                LiveMessageStorage.Save(msg.Id, new LivePaginatedMessage
-                                {
-                                    Pages = embeds,
-                                    CurrentPageIndex = 0
-                                });
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteLineWithPretext($"Updater error for {string.Join(", ", uuids.Cast<object>())}: {ex.Message}", OutputType.Warning);
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(10)); // delay for consolidated embeds
-                }
-                // ReSharper disable once FunctionNeverReturns
-            });
-
+                });
         }
         
         if (_config is { ConsolidateEmbeds: false, Paginate: false })
         {
             foreach (var server in servers.Data)
             {
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 3000)));
-                    List<string?> uuid = [server.Attributes.Uuid];
-
-                    while (true)
+                StartEmbedUpdaterLoop(
+                    EmbedUpdateMode.PerServer,
+                    async () =>
                     {
-                        try
-                        {
-                            var embed = await BuildEmbed(server);
-                            var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.LastOrDefault().Key);
+                        var uuid = server.Attributes.Uuid;
+                        var stats = GetServerStats(uuid);
+                        if (stats == null) return ([uuid], null!);
 
-                            if (tracked != null)
-                            {
-                                var msg = await channel.GetMessageAsync((ulong)tracked);
-                                if (EmbedHasChanged(uuid, embed!)) await msg.ModifyAsync(embed);
-                            }
-                            else
-                            {
-                                var msg = await channel.SendMessageAsync(embed);
-                                LiveMessageStorage.Save(msg.Id);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            WriteLineWithPretext($"Updater error for {uuid}: {ex.Message}", OutputType.Warning);
-                        }
+                        var embed = await EmbedService.BuildSingleServerEmbed(server, stats);
+                        return ([uuid], embed);
+                    },
+                    async (embedObj, uuid) =>
+                    {
+                        if (embedObj is not DiscordEmbed embed) return;
+                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.LastOrDefault().Key);
 
-                        await Task.Delay(TimeSpan.FromSeconds(10)); // delay per server
-                    }
-                    // ReSharper disable once FunctionNeverReturns
-                });
+                        if (tracked != null)
+                        {
+                            WriteLineWithPretext($"Updating message {tracked}");
+                            var msg = await channel.GetMessageAsync((ulong)tracked);
+                            if (EmbedHasChanged(uuid, embed)) await msg.ModifyAsync(embed);
+                        }
+                        else
+                        {
+                            var msg = await channel.SendMessageAsync(embed);
+                            LiveMessageStorage.Save(msg.Id);
+                        }
+                    },
+                    delaySeconds: 10 + Random.Shared.Next(0, 3) // randomized per-server delay
+                );
             }
         }
     }
 
-    private static async Task<DiscordMessage> SendPaginatedMessageAsync(DiscordClient client, DiscordChannel channel, List<DiscordEmbedBuilder> embeds)
+    private static void StartEmbedUpdaterLoop(EmbedUpdateMode mode, Func<Task<(List<string?> uuids, object embedOrEmbeds)>> generateEmbedsAsync, Func<object, List<string?>, Task> applyEmbedUpdateAsync, int delaySeconds = 10)
     {
-        int pageIndex = 0;
-
-        var message = await channel.SendMessageAsync(embed: embeds[pageIndex].Build());
-
-        var left = DiscordEmoji.FromUnicode("◀️");
-        var right = DiscordEmoji.FromUnicode("▶️");
-
-        await message.CreateReactionAsync(left);
-        await message.CreateReactionAsync(right);
-
-        var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-
-        async Task ReactionHandler(DiscordClient _, MessageReactionAddEventArgs e)
+        Task.Run(async () =>
         {
-            if (e.Message.Id != message.Id || e.User.IsBot) return;
+            while (true)
+            {
+                try
+                {
+                    var (uuids, embedData) = await generateEmbedsAsync();
+                    await applyEmbedUpdateAsync(embedData, uuids);
+                }
+                catch (Exception ex)
+                {
+                    WriteLineWithPretext($"Updater error for mode {mode}: {ex.Message}", OutputType.Warning);
+                }
 
-            if (e.Emoji == right)
-                pageIndex = (pageIndex + 1) % embeds.Count;
-            else if (e.Emoji == left)
-                pageIndex = (pageIndex - 1 + embeds.Count) % embeds.Count;
-            else
-                return;
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
+        });
+    }
 
-            await message.ModifyAsync(embed: embeds[pageIndex].Build());
-            await message.DeleteReactionAsync(e.Emoji, e.User);
-        }
 
-        client.MessageReactionAdded += ReactionHandler;
-
-        try
+    private static async Task<DiscordMessage> SendPaginatedMessageAsync(DiscordChannel channel, List<DiscordEmbed> embeds)
+    {
+        var buttons = new DiscordComponent[]
         {
-            await Task.Delay(TimeSpan.FromMinutes(2), cancellation.Token);
-        }
-        catch (TaskCanceledException) { }
+            new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
+            new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
+        };
 
-        client.MessageReactionAdded -= ReactionHandler;
+        var messageBuilder = new DiscordMessageBuilder()
+            .WithEmbed(embeds[0])
+            .AddComponents(buttons);
 
-        // Optional cleanup after timeout
-        await message.DeleteAllReactionsAsync();
+        var message = await messageBuilder.SendAsync(channel);
+
+        LiveMessageStorage.Save(message.Id, 0);
 
         return message;
     }
 
-    static Task<List<DiscordEmbedBuilder>> BuildPaginatedEmbeds(List<ServerResponse> servers)
-    {
-        List<DiscordEmbedBuilder> pages = new();
-        List<string?> uuids = servers.Select(s => s.Attributes.Uuid).ToList();
-        List<StatsResponse?> statsResponses = GetServerStatsList(uuids);
-
-        for (int i = 0; i < servers.Count; i++)
-        {
-            var server = servers[i];
-            var stats = statsResponses.ElementAtOrDefault(i);
-
-            var embed = new DiscordEmbedBuilder
-            {
-                Title = $"🎮 {server.Attributes.Name}",
-                Color = DiscordColor.Azure,
-            };
-            
-            void SafeAddField(DiscordEmbedBuilder builder, string name, string? value, bool inline = false)
-            {
-                if (string.IsNullOrEmpty(value))
-                {
-                    builder.AddField(name, "N/A", inline);
-                    return;
-                }
-
-                builder.AddField(name, value, inline);
-            }
-        
-            string statusIcon = stats?.Attributes.CurrentState.ToLower() switch
-            {
-                "offline" => "🔴",
-                "running" => "🟢",
-                _ => "⚪" // Unknown or initializing
-            };
-
-            SafeAddField(embed, $"{statusIcon} **Status** ", stats?.Attributes.CurrentState, true);
-            SafeAddField(embed, "🧠 **Memory:** ", $"{FormatBytes(stats?.Attributes.Resources.MemoryBytes ?? 0)}", true);
-            SafeAddField(embed, "🖥️ **CPU:** ", $"{stats?.Attributes.Resources.CpuAbsolute:0.00}%", true);
-            SafeAddField(embed, "💽 **Disk:** ", $"{FormatBytes(stats?.Attributes.Resources.DiskBytes ?? 0)}", true);
-            SafeAddField(embed, "📥 **Network RX:** ", $"{FormatBytes(stats?.Attributes.Resources.NetworkRxBytes ?? 0)}", true);
-            SafeAddField(embed, "📤 **Network TX:** ", $"{FormatBytes(stats?.Attributes.Resources.NetworkTxBytes ?? 0)}", true);
-            SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats?.Attributes.Resources.Uptime ?? 0)}", true);
-
-            var charCount = GetEmbedCharacterCount(embed);
-            WriteLineWithPretext($"Embed character count: {charCount}");
-
-            pages.Add(embed);
-        }
-
-        return Task.FromResult(pages);
-    }
-
-    
-    private static Task<DiscordEmbed> BuildEmbed(List<ServerResponse> servers)
-    {
-        List<string?> uuids = servers.Select(s => s.Attributes.Uuid).ToList();
-        List<StatsResponse?> statsResponses = GetServerStatsList(uuids);
-            
-        var embed = new DiscordEmbedBuilder
-        {
-            Title = "📡 Game Server Status Overview",
-            Color = DiscordColor.Azure
-        };
-
-        for (int i = 0; i < servers.Count; i++)
-        {
-            var server = servers[i];
-            var stats = statsResponses.ElementAtOrDefault(i);
-
-            if (server?.Attributes == null)
-                continue;
-
-            string name = server.Attributes.Name;
-            string status = stats?.Attributes?.CurrentState ?? "Unknown";
-            string statusIcon = status.ToLower() switch
-            {
-                "offline" => "🔴",
-                "running" => "🟢",
-                _ => "⚪" // Unknown or initializing
-            };
-            string memory = stats?.Attributes?.Resources?.MemoryBytes is { } mem
-                ? $"{mem / (1024 * 1024):N0} MB"
-                : "N/A";
-            string cpu = stats?.Attributes?.Resources?.CpuAbsolute is { } cpuAbs
-                ? $"{cpuAbs:0.00}%"
-                : "N/A";
-            string disk = FormatBytes(stats?.Attributes?.Resources?.DiskBytes ?? 0);
-            string networkRx = FormatBytes(stats?.Attributes?.Resources?.NetworkRxBytes ?? 0);
-            string networkTx = FormatBytes(stats?.Attributes?.Resources?.NetworkTxBytes ?? 0);
-
-            string uptime = FormatUptime(stats?.Attributes?.Resources?.Uptime ?? 0);
-
-            string summary = $"{statusIcon} **Status:** {status}\n" +
-                             $"🧠 **Memory:** {memory}\n" +
-                             $"🖥️ **CPU:** {cpu}\n" +
-                             $"💽 **Disk:** {disk}\n" +
-                             $"📥 **Network RX:** {networkRx}\n" +
-                             $"📤 **Network TX:** {networkTx}\n" +
-                             $"⏳ **Uptime:** {uptime}"; // Add Server IP and port if available and configured
-
-            embed.AddField($"🎮 {name}", summary, inline: true);
-            
-            if (embed.Fields.Count < 25) continue;
-            WriteLineWithPretext("reached embed limit of 25 fields", OutputType.Error);
-            break; // prevents Discord embed limit
-        }
-        
-        var charCount = GetEmbedCharacterCount(embed);
-        WriteLineWithPretext($"Embed character count: {charCount}");
-
-        if (charCount > 6000) WriteLineWithPretext("⚠️ Embed exceeds the 6000 character limit!", OutputType.Error);
-        
-        return Task.FromResult(embed.Build()); 
-    }
-    
-    private static async Task<DiscordEmbed?> BuildEmbed(ServerResponse server)
-    {
-        var stats = GetServerStats(server.Attributes.Uuid);
-        if (stats == null)
-        {
-            await TargetChannel!.SendMessageAsync("Failed to retrieve server stats information.");
-            return null;
-        }
-
-        var embed = new DiscordEmbedBuilder
-        {
-            Title = $"🎮 Server: {server.Attributes.Name}",
-            Color = DiscordColor.Azure
-        };
-
-        void SafeAddField(DiscordEmbedBuilder builder, string name, string? value, bool inline = false)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                builder.AddField(name, "N/A", inline);
-                return;
-            }
-
-            builder.AddField(name, value, inline);
-        }
-        
-        string statusIcon = stats.Attributes.CurrentState.ToLower() switch
-        {
-            "offline" => "🔴",
-            "running" => "🟢",
-            _ => "⚪" // Unknown or initializing
-        };
-
-        SafeAddField(embed, $"{statusIcon} **Status** ", stats.Attributes.CurrentState, true);
-        SafeAddField(embed, "🧠 **Memory:** ", $"{FormatBytes(stats.Attributes.Resources.MemoryBytes)}", true);
-        SafeAddField(embed, "🖥️ **CPU:** ", $"{stats.Attributes.Resources.CpuAbsolute:0.00}%", true);
-        SafeAddField(embed, "💽 **Disk:** ", $"{FormatBytes(stats.Attributes.Resources.DiskBytes)}", true);
-        SafeAddField(embed, "📥 **Network RX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkRxBytes)}", true);
-        SafeAddField(embed, "📤 **Network TX:** ", $"{FormatBytes(stats.Attributes.Resources.NetworkTxBytes)}", true);
-        SafeAddField(embed, "⏳ **Uptime:** ", $"{FormatUptime(stats.Attributes.Resources.Uptime)}", true);
-
-        var charCount = GetEmbedCharacterCount(embed);
-        WriteLineWithPretext($"Embed character count: {charCount}");
-
-        if (charCount > 6000) WriteLineWithPretext("⚠️ Embed exceeds the 6000 character limit!", OutputType.Error);
-
-        return embed.Build();
-    }
 }

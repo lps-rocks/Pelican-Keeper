@@ -70,16 +70,10 @@ public abstract class TemplateClasses
         public long Uptime { get; set; }
     }
     
-    public class LivePaginatedMessage
-    {
-        public List<DiscordEmbedBuilder> Pages { get; set; } = new();
-        public int CurrentPageIndex { get; set; } = 0;
-    }
-    
     public class LiveMessageJsonStorage
     {
         public HashSet<ulong>? LiveStore { get; set; } = new();
-        public Dictionary<ulong, LivePaginatedMessage>? PaginatedLiveStore { get; set; } = new();
+        public Dictionary<ulong, int>? PaginatedLiveStore { get; set; } = new();
     }
 
     public enum OutputSortingDirection

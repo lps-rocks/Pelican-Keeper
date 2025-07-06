@@ -8,12 +8,15 @@ using static ConsoleExt;
 
 public static class LiveMessageStorage
 {
-    private const string HistoryFilePath = "MessageHistory.json";
+    private const string HistoryFilePath = "MessageHistory.json"; //Todo: Look into why the LivePaginatedMessage is not being saved or loaded properly
 
     internal static LiveMessageJsonStorage? Cache = new();
 
-    public static LivePaginatedMessage? GetPaginated(ulong messageId)
-        => Cache?.PaginatedLiveStore?.GetValueOrDefault(messageId);
+    public static int? GetPaginated(ulong? messageId)
+    {
+        if (Cache?.PaginatedLiveStore == null || Cache.PaginatedLiveStore.Count == 0 || messageId == null) return null;
+        return Cache.PaginatedLiveStore?.First(x => x.Key == messageId).Value;
+    }
 
     static LiveMessageStorage()
     {
@@ -52,15 +55,15 @@ public static class LiveMessageStorage
         }));
     }
     
-    public static void Save(ulong messageId, LivePaginatedMessage msg)
+    public static void Save(ulong messageId, int currentPageIndex)
     {
         if (Cache is { PaginatedLiveStore: not null } && Cache.PaginatedLiveStore.ContainsKey(messageId))
         {
-            Cache.PaginatedLiveStore[messageId] = msg;
+            Cache.PaginatedLiveStore[messageId] = currentPageIndex;
         }
         else
         {
-            Cache?.PaginatedLiveStore?.Add(messageId, msg);
+            Cache?.PaginatedLiveStore?.Add(messageId, currentPageIndex);
         }
         File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
@@ -71,6 +74,13 @@ public static class LiveMessageStorage
     public static void Remove(ulong? messageId)
     {
         if (Cache != null && messageId != null && Cache.LiveStore != null && Cache.LiveStore.Remove((ulong)messageId))
+        {
+            File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            }));
+        }
+        if (Cache != null && messageId != null && Cache.PaginatedLiveStore != null && Cache.PaginatedLiveStore.Remove((ulong)messageId))
         {
             File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
             {
