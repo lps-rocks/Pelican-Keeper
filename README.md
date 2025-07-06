@@ -14,6 +14,7 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 
 ### Currently being worked on
 - [x] Finish adding Pagination
+- [ ] Customizable Embed Message and Structure
 - [ ] Add Joinable IP:Port to the displayed server information
 
 ## Setup in Pelican
