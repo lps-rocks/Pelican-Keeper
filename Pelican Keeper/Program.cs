@@ -89,6 +89,13 @@ internal static class Program
         await Task.Delay(-1);
     }
 
+    /// <summary>
+    /// Function that is called when a component interaction is created.
+    /// It handles the page flipping of the paginated message using buttons.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    /// <returns></returns>
     private static async Task<Task> OnComponentInteractionCreated(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (LiveMessageStorage.GetPaginated(e.Message.Id) is not { } pagedTracked || e.User.IsBot)
@@ -133,20 +140,25 @@ internal static class Program
         }
         catch (NotFoundException nf)
         {
-            Console.WriteLine("❌ Interaction expired or already responded to. Skipping. " + nf.Message);
+            WriteLineWithPretext("Interaction expired or already responded to. Skipping. " + nf.Message, OutputType.Error);
         }
         catch (BadRequestException br)
         {
-            Console.WriteLine("❌ Bad request during interaction: " + br.JsonMessage);
+            WriteLineWithPretext("Bad request during interaction: " + br.JsonMessage, OutputType.Error);
         }
         catch (Exception ex)
         {
-            Console.WriteLine("⚠️ Unexpected error during component interaction: " + ex.Message);
+            WriteLineWithPretext("Unexpected error during component interaction: " + ex.Message, OutputType.Error);
         }
 
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Function that is called when the bot is ready to send messages.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
         WriteLineWithPretext("Bot is connected and ready!");
@@ -155,6 +167,12 @@ internal static class Program
         _ = StartStatsUpdater(sender, Secrets.ChannelId);
     }
     
+    /// <summary>
+    /// Function that is called when a message is deleted in the target channel.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    /// <returns></returns>
     private static Task OnMessageDeleted(DiscordClient sender, MessageDeleteEventArgs e)
     {
         if (e.Message.Channel.Id != Secrets.ChannelId) return Task.CompletedTask;
@@ -177,6 +195,11 @@ internal static class Program
         return Task.CompletedTask;
     }
     
+    /// <summary>
+    /// Starts the Sever statistics updater loop.
+    /// </summary>
+    /// <param name="client">Bot client</param>
+    /// <param name="channelId">Target channel</param>
     private static async Task StartStatsUpdater(DiscordClient client, ulong channelId)
     {
         var channel = await client.GetChannelAsync(channelId);
@@ -188,6 +211,7 @@ internal static class Program
             return;
         }
         
+        // When the config is set to consolidate embeds
         if (_config.ConsolidateEmbeds)
         {
             StartEmbedUpdaterLoop(
@@ -220,6 +244,7 @@ internal static class Program
                 });
         }
         
+        // When the config is set to paginate
         if (_config.Paginate)
         {
             StartEmbedUpdaterLoop(
@@ -243,10 +268,9 @@ internal static class Program
                         var pagedTracked = LiveMessageStorage.GetPaginated(cacheEntry.Key);
                         if (pagedTracked != null)
                         {
-                            // Update the stored pages with the new embeds
                             _pages = embeds;
 
-                            // Keep the current page index (don't reset to 0)
+                            // Keeps the current page index instead of resetting to 0
                             var currentIndex = pagedTracked.Value;
                             var updatedEmbed = embeds[currentIndex];
 
@@ -260,7 +284,6 @@ internal static class Program
                         }
                         else
                         {
-                            // No tracked message yet → send a new one
                             var msg = await SendPaginatedMessageAsync(channel, embeds);
 
                             LiveMessageStorage.Save(msg.Id, 0);
@@ -269,6 +292,7 @@ internal static class Program
                 });
         }
         
+        // When the config is set to neither consolidate nor paginate
         if (_config is { ConsolidateEmbeds: false, Paginate: false })
         {
             foreach (var server in servers.Data)
@@ -307,6 +331,13 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Starts the embed updater loop called by the StartstatsUpdater method
+    /// </summary>
+    /// <param name="mode">The EmbedUpdateMode to use</param>
+    /// <param name="generateEmbedsAsync">A function that generates the embeds</param>
+    /// <param name="applyEmbedUpdateAsync">A function that applies the embed update</param>
+    /// <param name="delaySeconds">Delay in seconds between updates</param>
     private static void StartEmbedUpdaterLoop(EmbedUpdateMode mode, Func<Task<(List<string?> uuids, object embedOrEmbeds)>> generateEmbedsAsync, Func<object, List<string?>, Task> applyEmbedUpdateAsync, int delaySeconds = 10)
     {
         Task.Run(async () =>
@@ -329,6 +360,12 @@ internal static class Program
     }
 
 
+    /// <summary>
+    /// Sends a paginated message
+    /// </summary>
+    /// <param name="channel">Target channel</param>
+    /// <param name="embeds">List of embeds to paginate</param>
+    /// <returns>The discord message</returns>
     private static async Task<DiscordMessage> SendPaginatedMessageAsync(DiscordChannel channel, List<DiscordEmbed> embeds)
     {
         var buttons = new DiscordComponent[]

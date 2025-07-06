@@ -8,6 +8,11 @@ using static HelperClass;
 
 public static class PelicanInterface
 {
+    /// <summary>
+    /// Gets the server stats from the Pelican API
+    /// </summary>
+    /// <param name="uuid">UUID of the game server</param>
+    /// <returns>The server stats response</returns>
     internal static StatsResponse? GetServerStats(string? uuid)
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/" + uuid + "/resources");
@@ -43,6 +48,10 @@ public static class PelicanInterface
         return null;
     }
 
+    /// <summary>
+    /// Gets the list of servers from the Pelican API
+    /// </summary>
+    /// <returns>Server list response</returns>
     internal static ServerListResponse? GetServersList()
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/application/servers");
@@ -70,6 +79,11 @@ public static class PelicanInterface
         return null;
     }
 
+    /// <summary>
+    /// Gets alist of server stats from the Pelican API
+    /// </summary>
+    /// <param name="uuids">list of game server UUIDs</param>
+    /// <returns>list of server stats responses</returns>
     internal static List<StatsResponse?> GetServerStatsList(List<string?> uuids)
     {
         List<StatsResponse?> stats = uuids.Select(GetServerStats).ToList();

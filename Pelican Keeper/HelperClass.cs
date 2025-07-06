@@ -7,6 +7,12 @@ public static class HelperClass
 {
     private static readonly Dictionary<string, string> LastEmbedHashes = new();
     
+    /// <summary>
+    /// Creates a rest request to the Pelican API
+    /// </summary>
+    /// <param name="client">RestClient</param>
+    /// <param name="token">Pelican API token</param>
+    /// <returns>The RestResponse</returns>
     internal static RestResponse CreateRequest(RestClient client, string? token)
     {
         var request = new RestRequest("");
@@ -16,6 +22,12 @@ public static class HelperClass
         return response;
     }
 
+    /// <summary>
+    /// Checks if the embed has changed
+    /// </summary>
+    /// <param name="uuid">list of server UUIDs</param>
+    /// <param name="newEmbed">new embed</param>
+    /// <returns>bool whether the embed has changed</returns>
     internal static bool EmbedHasChanged(List<string?> uuid, DiscordEmbed newEmbed)
     {
         foreach (var uuidItem in uuid)

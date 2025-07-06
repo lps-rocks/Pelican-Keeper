@@ -4,6 +4,12 @@ namespace Pelican_Keeper;
 
 public class ServerMarkdown
 {
+    /// <summary>
+    /// Parses a template with regex to replace placeholders with values
+    /// </summary>
+    /// <param name="template">string template</param>
+    /// <param name="vars">dictionary of variables</param>
+    /// <returns>string of parsed template</returns>
     string ParseTemplateWithRegex(string template, Dictionary<string, string> vars)
     {
         return Regex.Replace(template, @"\{\{(\w+)\}\}", match =>

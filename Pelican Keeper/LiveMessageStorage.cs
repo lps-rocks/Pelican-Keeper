@@ -8,22 +8,33 @@ using static ConsoleExt;
 
 public static class LiveMessageStorage
 {
-    private const string HistoryFilePath = "MessageHistory.json"; //Todo: Look into why the LivePaginatedMessage is not being saved or loaded properly
+    private const string HistoryFilePath = "MessageHistory.json";
 
     internal static LiveMessageJsonStorage? Cache = new();
 
+    /// <summary>
+    /// Gets the page index of a paginated message if it exists.
+    /// </summary>
+    /// <param name="messageId">discord message ID</param>
+    /// <returns>page index</returns>
     public static int? GetPaginated(ulong? messageId)
     {
         if (Cache?.PaginatedLiveStore == null || Cache.PaginatedLiveStore.Count == 0 || messageId == null) return null;
         return Cache.PaginatedLiveStore?.First(x => x.Key == messageId).Value;
     }
 
+    /// <summary>
+    /// Entry point and initializer for the class.
+    /// </summary>
     static LiveMessageStorage()
     {
         LoadAll();
         _ = ValidateCache();
     }
 
+    /// <summary>
+    /// Loads the cache from the file.
+    /// </summary>
     private static void LoadAll()
     {
         if (!File.Exists(HistoryFilePath))
@@ -46,6 +57,10 @@ public static class LiveMessageStorage
         }
     }
 
+    /// <summary>
+    /// Saves the message ID to the cache.
+    /// </summary>
+    /// <param name="messageId">discord message ID</param>
     public static void Save(ulong messageId)
     {
         Cache?.LiveStore?.Add(messageId);
@@ -55,6 +70,11 @@ public static class LiveMessageStorage
         }));
     }
     
+    /// <summary>
+    /// Saves the page index of a paginated message.
+    /// </summary>
+    /// <param name="messageId">discord message ID</param>
+    /// <param name="currentPageIndex">page index</param>
     public static void Save(ulong messageId, int currentPageIndex)
     {
         if (Cache is { PaginatedLiveStore: not null } && Cache.PaginatedLiveStore.ContainsKey(messageId))
@@ -89,6 +109,9 @@ public static class LiveMessageStorage
         }
     }
     
+    /// <summary>
+    /// Validates the cache and removes any messages that no longer exist in the channel.
+    /// </summary>
     private static async Task ValidateCache()
     {
         if (Cache is { LiveStore: not null })
@@ -114,6 +137,12 @@ public static class LiveMessageStorage
         }));
     }
 
+    /// <summary>
+    /// Checks if a message exists in a channel.
+    /// </summary>
+    /// <param name="channel">target channel</param>
+    /// <param name="messageId">discord message ID</param>
+    /// <returns>bool whether the message exists</returns>
     private static async Task<bool> MessageExistsAsync(DiscordChannel channel, ulong messageId)
     {
         try
@@ -123,12 +152,16 @@ public static class LiveMessageStorage
         }
         catch (DSharpPlus.Exceptions.NotFoundException)
         {
-            // Discord returned 404 (Not Found), so the message doesn't exist
+            WriteLineWithPretext("Message not found", OutputType.Warning);
             return false;
         }
     }
-
-
+    
+    /// <summary>
+    /// Gets the message ID from the cache if it exists.
+    /// </summary>
+    /// <param name="messageId">discord message ID</param>
+    /// <returns>discord message ID</returns>
     public static ulong? Get(ulong? messageId)
     {
         if (Cache?.LiveStore == null || Cache.LiveStore.Count == 0 || messageId == null) return null;
