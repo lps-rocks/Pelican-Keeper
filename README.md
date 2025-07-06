@@ -110,4 +110,5 @@ The config.json file can be found in the installatin folder and for the moment y
 > 
 > Note that the page will be the same serverwide, meaning if someone changed the page it changes it for you as well.
 
-![image](https://github.com/user-attachments/assets/014e086a-506d-4680-a334-5b035572edf9)
+![image](https://github.com/user-attachments/assets/7cb58936-71f7-4378-9256-0a79c5056256)
+
