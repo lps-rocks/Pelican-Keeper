@@ -41,4 +41,13 @@ public static class FileManager
         await using var writer = new StreamWriter(configFile);
         await writer.WriteAsync(defaultConfig);
     }
+
+    public static async Task CreateMessageMarkdownFile()
+    {
+        await using var messageMarkdownFile = File.Create("MessageMarkdown.txt");
+        var defaultConfig = new string("[Title]🎮 **{{ServerName}}**[/Title]\n\n{{StatusIcon}} **Status:** {{Status}}\n🖥️ **CPU:** {{Cpu}}\n🧠 **Memory:** {{Memory}}\n💽 **Disk:** {{Disk}}\n📥 **NetworkRX:** {{NetworkRx}}\n📤 **NetworkTX:** {{NetworkTx}}\n⏳ **Uptime:** {{Uptime}}");
+        await using var writer = new StreamWriter(messageMarkdownFile);
+        await writer.WriteAsync(defaultConfig);
+    }
+    
 }

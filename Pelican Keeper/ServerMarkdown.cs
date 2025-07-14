@@ -5,6 +5,7 @@ namespace Pelican_Keeper;
 public static class ServerMarkdown
 {
     private record PreprocessedTemplate(string Body, Dictionary<string, string> Tags);
+    private static readonly string MessageMarkdownPath = FileManager.GetFilePath("MessageMarkdown.txt");
 
     /// <summary>
     /// Processes [Tag]...[/Tag] blocks, replaces placeholders inside them,
@@ -14,7 +15,7 @@ public static class ServerMarkdown
     /// <returns>A preprocessed template</returns>
     private static PreprocessedTemplate PreprocessTemplateTags(object model)
     {
-        string templateText = File.ReadAllText("MessageMarkdown.txt");
+        string templateText = File.ReadAllText(MessageMarkdownPath);
         
         var tagDict = new Dictionary<string, string>();
 

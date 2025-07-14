@@ -34,6 +34,12 @@ internal static class Program
     {
         string secretsPath = FileManager.GetFilePath("Secrets.json");
         string configPath = FileManager.GetFilePath("Config.json");
+
+        if (FileManager.GetFilePath("MessageMarkdown.txt") == String.Empty)
+        {
+            Console.WriteLine("MessageMarkdown.txt not found. Creating default one.");
+            _ = FileManager.CreateMessageMarkdownFile();
+        }
         
         if (secretsPath == String.Empty)
         {
