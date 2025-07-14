@@ -83,9 +83,7 @@ public static class ServerMarkdown
         var serverName = result.Tags.GetValueOrDefault("Title", "Default Title");
         var message = ReplacePlaceholders(result.Body, viewModel);
 
-        ConsoleExt.WriteLineWithPretext($"Server: {viewModel.ServerName}");
-        ConsoleExt.WriteLineWithPretext($"Message Character Count: {message.Length}");
-        ConsoleExt.WriteLineWithPretext($"Parsed Message: {message}");
+        ConsoleExt.WriteLineWithPretext($"Server: {viewModel.ServerName}, Message Character Count: {message.Length}");
 
         return (message, serverName);
     }
