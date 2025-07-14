@@ -75,6 +75,19 @@ public abstract class TemplateClasses
         public HashSet<ulong>? LiveStore { get; set; } = new();
         public Dictionary<ulong, int>? PaginatedLiveStore { get; set; } = new();
     }
+    
+    public class ServerViewModel
+    {
+        public string ServerName { get; set; } = null!;
+        public string Status { get; set; } = null!;
+        public string StatusIcon { get; set; } = null!;
+        public string Cpu { get; set; } = null!;
+        public string Memory { get; set; } = null!;
+        public string Disk { get; set; } = null!;
+        public string NetworkRx { get; set; } = null!;
+        public string NetworkTx { get; set; } = null!;
+        public string Uptime { get; set; } = null!;
+    }
 
     public enum OutputSortingDirection
     {

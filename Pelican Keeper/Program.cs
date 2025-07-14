@@ -32,20 +32,18 @@ internal static class Program
 
     private static async Task Main()
     {
-        if (!File.Exists("Secrets.json"))
+        string secretsPath = FileManager.GetFilePath("Secrets.json");
+        string configPath = FileManager.GetFilePath("Config.json");
+        
+        if (secretsPath == String.Empty)
         {
-            WriteLineWithPretext("Secrets.json not found. Creating default one.", OutputType.Warning);
-            await using var secretsFile = File.Create("Secrets.json");
-            string defaultSecrets = new string("{\n  \"ClientToken\": \"YOUR_CLIENT_TOKEN\",\n  \"ServerToken\": \"YOUR_SERVER_TOKEN\",\n  \"ServerUrl\": \"YOUR_BASIC_SERVER_URL\",\n  \"BotToken\": \"YOUR_DISCORD_BOT_TOKEN\",\n  \"ChannelId\": \"THE_CHANNEL_ID_YOU_WANT_THE_BOT_TO_POST_IN\",\n  \"ExternalServerIP\": \"YOUR_EXTERNAL_SERVER_IP\"\n}");
-            await using var writer = new StreamWriter(secretsFile);
-            await writer.WriteAsync(defaultSecrets);
-            WriteLineWithPretext("Created default Secrets.json. Please fill out the values.", OutputType.Warning);
+            _ = FileManager.CreateSecretsFile();
             return;
         }
         
         try
         {
-            var secretsJson = await File.ReadAllTextAsync("Secrets.json");
+            var secretsJson = await File.ReadAllTextAsync(secretsPath);
             Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
         }
         catch (Exception)
@@ -54,25 +52,19 @@ internal static class Program
             return;
         }
 
-        if (!File.Exists("Config.json"))
+        if (configPath == String.Empty)
         {
-            await using var configFile = File.Create("Config.json");
-            var defaultConfig = new string("{\n  \"ConsolidateEmbeds\": true,\n  \"Paginate\": false\n}");
-            await using var writer = new StreamWriter(configFile);
-            await writer.WriteAsync(defaultConfig);
+            _ = FileManager.CreateConfigFile();
         }
         
-        var configJson = await File.ReadAllTextAsync("Config.json");
+        var configJson = await File.ReadAllTextAsync(configPath);
         var config = JsonSerializer.Deserialize<Config>(configJson);
         if (config == null)
         {
-            WriteLineWithPretext("Failed to load config.", OutputType.Error);
+            WriteLineWithPretext("Failed to load config.", OutputType.Error, new NullReferenceException());
             return;
         }
-        else
-        {
-            _config = config;
-        }
+        _config = config;
 
         var discord = new DiscordClient(new DiscordConfiguration
         {
@@ -352,6 +344,7 @@ internal static class Program
                 catch (Exception ex)
                 {
                     WriteLineWithPretext($"Updater error for mode {mode}: {ex.Message}", OutputType.Warning);
+                    WriteLineWithPretext($"Stack trace: {ex.StackTrace}", OutputType.Warning);
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));

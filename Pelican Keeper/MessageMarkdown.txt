@@ -1,0 +1,9 @@
+[Title]🎮 **{{ServerName}}**[/Title]
+
+{{StatusIcon}} **Status:** {{Status}}
+🖥️ **CPU:** {{Cpu}}
+🧠 **Memory:** {{Memory}}
+💽 **Disk:** {{Disk}}
+📥 **NetworkRX:** {{NetworkRx}}
+📤 **NetworkTX:** {{NetworkTx}}
+⏳ **Uptime:** {{Uptime}}

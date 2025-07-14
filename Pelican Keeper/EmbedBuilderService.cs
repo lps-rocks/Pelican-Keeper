@@ -1,4 +1,5 @@
-﻿using DSharpPlus.Entities;
+﻿using System.Runtime.InteropServices.JavaScript;
+using DSharpPlus.Entities;
 
 namespace Pelican_Keeper;
 using static TemplateClasses;
@@ -29,12 +30,11 @@ public class EmbedBuilderService : IEmbedBuilderService
 
         for (int i = 0; i < servers.Count && embed.Fields.Count < 25; i++)
         {
-            var server = servers[i];
             var stats = statsList.ElementAtOrDefault(i);
             if (stats?.Attributes == null) continue;
 
-            var summary = FormatSummary(stats);
-            embed.AddField($"🎮 {server.Attributes.Name}", summary, inline: true);
+            var summary = ServerMarkdown.ParseTemplate(servers[i], stats);
+            embed.AddField(summary.serverName, summary.message, inline: true);
         }
 
         ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
@@ -51,13 +51,15 @@ public class EmbedBuilderService : IEmbedBuilderService
             var stats = statsList.ElementAtOrDefault(i);
             if (stats?.Attributes == null) continue;
 
+            var serverInfo = ServerMarkdown.ParseTemplate(server, stats);
+
             var embed = new DiscordEmbedBuilder
             {
-                Title = $"🎮 {server.Attributes.Name}",
+                Title = serverInfo.serverName,
                 Color = DiscordColor.Azure
             };
 
-            AddStatFields(embed, stats);
+            embed.AddField("\u200B", serverInfo.message,true);
             ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
             embeds.Add(embed.Build());
         }

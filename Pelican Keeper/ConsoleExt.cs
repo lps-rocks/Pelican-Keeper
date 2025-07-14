@@ -33,10 +33,10 @@ public static class ConsoleExt
         {
             Console.WriteLine(output);
         }
-        if (exception != null)
-        {
-            //do something with the exception
-        }
+
+        if (exception == null) return length1 + length2;
+        Console.WriteLine($"Exception: {exception.Message}");
+        Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;
     }
 
@@ -60,10 +60,10 @@ public static class ConsoleExt
         {
             Console.Write(output);
         }
-        if (exception != null)
-        {
-            //do something with the exception
-        }
+
+        if (exception == null) return length1 + length2;
+        Console.WriteLine($"Exception: {exception.Message}");
+        Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;
     }
 
