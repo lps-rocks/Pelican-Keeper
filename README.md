@@ -133,7 +133,7 @@ The config.json file can be found in the installation folder, and for the moment
 > [!TIP]
 > The Markdown file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/MessageMarkdown.txt).
 
-And The Markdown formatting used [Discord's](https://discord.com/developers/docs/reference/markdown-structure) formatting with some slight modifications.<br>
+And The Markdown formatting used [Discord's](https://support.discord.com/hc/en-us/articles/210298617-Markdown-Text-101-Chat-Formatting-Bold-Italic-Underline) formatting with some slight modifications.<br>
 Anything marked with {{}} will be replaced with the variable name.<br>
 Finally, There is a special Tag called [Title] for the server Name to mark what is supposed to be the server name for special use in the title of the embed.
 
