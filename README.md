@@ -80,7 +80,9 @@ dotnet run --project "Pelican Keeper"
 ## Secrets
 
 > [!TIP]
-> The Secrets file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/Secrets.json).
+> The Secrets file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/Secrets.json).<br>
+> The Server and Client Tokens are API keys you generate from your Pelican panel.
+> The Admin page is where you can generate the server API token, and the client API token is under the Profile settings.
 
 > [!WARNING]
 > Make sure you fill out the Secrets.json file found in the bot install directory, otherwise the bot **WILL NOT** work!
