@@ -6,6 +6,7 @@ public static class ServerMarkdown
 {
     private record PreprocessedTemplate(string Body, Dictionary<string, string> Tags);
     private static readonly string MessageMarkdownPath = FileManager.GetFilePath("MessageMarkdown.txt");
+    private static string _templateText = File.ReadAllText(MessageMarkdownPath);
 
     /// <summary>
     /// Processes [Tag]...[/Tag] blocks, replaces placeholders inside them,
@@ -15,13 +16,11 @@ public static class ServerMarkdown
     /// <returns>A preprocessed template</returns>
     private static PreprocessedTemplate PreprocessTemplateTags(object model)
     {
-        string templateText = File.ReadAllText(MessageMarkdownPath);
-        
         var tagDict = new Dictionary<string, string>();
 
         var tagRegex = new Regex(@"\[(\w+)](.*?)\[/\1]", RegexOptions.Singleline);
     
-        string strippedTemplate = tagRegex.Replace(templateText, match =>
+        string strippedTemplate = tagRegex.Replace(_templateText, match =>
         {
             string tag = match.Groups[1].Value;
             string content = match.Groups[2].Value;
@@ -68,6 +67,8 @@ public static class ServerMarkdown
     {
         var viewModel = new TemplateClasses.ServerViewModel
         {
+            //IpAndPort = 
+            Uuid = serverResponse.Attributes.Uuid,
             ServerName = serverResponse.Attributes.Name,
             Status = statsResponse.Attributes.CurrentState,
             StatusIcon = EmbedBuilderHelper.GetStatusIcon(statsResponse.Attributes.CurrentState),
@@ -83,8 +84,21 @@ public static class ServerMarkdown
         var serverName = result.Tags.GetValueOrDefault("Title", "Default Title");
         var message = ReplacePlaceholders(result.Body, viewModel);
 
-        ConsoleExt.WriteLineWithPretext($"Server: {viewModel.ServerName}, Message Character Count: {message.Length}");
+        if (Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext($"Server: {viewModel.ServerName}, Message Character Count: {message.Length}");
 
         return (message, serverName);
+    }
+    
+    public static void GetMarkdownFileContentAsync()
+    {
+        Task.Run(async () =>
+        {
+            while (Program.Config.ContinuesMarkdownRead)
+            {
+                _templateText = await File.ReadAllTextAsync(MessageMarkdownPath);
+                await Task.Delay(TimeSpan.FromSeconds(Program.Config.MarkdownUpdateInterval));
+            }
+        });
     }
 }

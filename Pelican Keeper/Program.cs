@@ -12,13 +12,11 @@ using static PelicanInterface;
 using static ConsoleExt;
 
 
-//TODO: Add a way to configure how the message should be sorted, e.g. by name, by status, etc.
-//TODO: Add an optional logging feature that sends a message to the target channel if a server is shutting down, starting, or has an error.
 internal static class Program
 {
-    public static DiscordChannel? TargetChannel;
-    public static Secrets Secrets = null!;
-    private static Config _config = null!;
+    internal static DiscordChannel? TargetChannel;
+    internal static Secrets Secrets = null!;
+    internal static Config Config = null!;
     private static readonly EmbedBuilderService EmbedService = new();
     private static List<DiscordEmbed> _pages = null!;
 
@@ -32,8 +30,8 @@ internal static class Program
 
     private static async Task Main()
     {
-        string secretsPath = FileManager.GetFilePath("Secrets.json");
-        string configPath = FileManager.GetFilePath("Config.json");
+        await FileManager.ReadSecretsFile();
+        await FileManager.ReadConfigFile();
 
         if (FileManager.GetFilePath("MessageMarkdown.txt") == String.Empty)
         {
@@ -41,36 +39,7 @@ internal static class Program
             _ = FileManager.CreateMessageMarkdownFile();
         }
         
-        if (secretsPath == String.Empty)
-        {
-            _ = FileManager.CreateSecretsFile();
-            return;
-        }
-        
-        try
-        {
-            var secretsJson = await File.ReadAllTextAsync(secretsPath);
-            Secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
-        }
-        catch (Exception)
-        {
-            WriteLineWithPretext("Failed to load secrets. Secrets not filled out. Check Secrets.json", OutputType.Error);
-            return;
-        }
-
-        if (configPath == String.Empty)
-        {
-            _ = FileManager.CreateConfigFile();
-        }
-        
-        var configJson = await File.ReadAllTextAsync(configPath);
-        var config = JsonSerializer.Deserialize<Config>(configJson);
-        if (config == null)
-        {
-            WriteLineWithPretext("Failed to load config.", OutputType.Error, new NullReferenceException());
-            return;
-        }
-        _config = config;
+        ServerMarkdown.GetMarkdownFileContentAsync();
 
         var discord = new DiscordClient(new DiscordConfiguration
         {
@@ -91,14 +60,15 @@ internal static class Program
     /// Function that is called when a component interaction is created.
     /// It handles the page flipping of the paginated message using buttons.
     /// </summary>
-    /// <param name="sender"></param>
-    /// <param name="e"></param>
-    /// <returns></returns>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">ComponentInteractionCreateEventArgs</param>
+    /// <returns>Task of Type Task</returns>
     private static async Task<Task> OnComponentInteractionCreated(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (LiveMessageStorage.GetPaginated(e.Message.Id) is not { } pagedTracked || e.User.IsBot)
         {
-            WriteLineWithPretext("User is Bot or is not tracked message ID is null.", OutputType.Warning);
+            if (Config.Debug)
+                WriteLineWithPretext("User is Bot or is not tracked, message ID is null.", OutputType.Warning);
             return Task.CompletedTask;
         }
 
@@ -113,7 +83,8 @@ internal static class Program
                 index = (index - 1 + _pages.Count) % _pages.Count;
                 break;
             default:
-                WriteLineWithPretext("Unknown interaction ID: " + e.Id, OutputType.Warning);
+                if (Config.Debug)
+                    WriteLineWithPretext("Unknown interaction ID: " + e.Id, OutputType.Warning);
                 return Task.CompletedTask;
         }
 
@@ -138,15 +109,18 @@ internal static class Program
         }
         catch (NotFoundException nf)
         {
-            WriteLineWithPretext("Interaction expired or already responded to. Skipping. " + nf.Message, OutputType.Error);
+            if (Config.Debug)
+                WriteLineWithPretext("Interaction expired or already responded to. Skipping. " + nf.Message, OutputType.Error);
         }
         catch (BadRequestException br)
         {
-            WriteLineWithPretext("Bad request during interaction: " + br.JsonMessage, OutputType.Error);
+            if (Config.Debug)
+                WriteLineWithPretext("Bad request during interaction: " + br.JsonMessage, OutputType.Error);
         }
         catch (Exception ex)
         {
-            WriteLineWithPretext("Unexpected error during component interaction: " + ex.Message, OutputType.Error);
+            if (Config.Debug)
+                WriteLineWithPretext("Unexpected error during component interaction: " + ex.Message, OutputType.Error);
         }
 
         return Task.CompletedTask;
@@ -155,8 +129,8 @@ internal static class Program
     /// <summary>
     /// Function that is called when the bot is ready to send messages.
     /// </summary>
-    /// <param name="sender"></param>
-    /// <param name="e"></param>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">ReadyEventArgs</param>
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
         WriteLineWithPretext("Bot is connected and ready!");
@@ -168,9 +142,9 @@ internal static class Program
     /// <summary>
     /// Function that is called when a message is deleted in the target channel.
     /// </summary>
-    /// <param name="sender"></param>
-    /// <param name="e"></param>
-    /// <returns></returns>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">MessageDeleteEventArgs</param>
+    /// <returns>Task</returns>
     private static Task OnMessageDeleted(DiscordClient sender, MessageDeleteEventArgs e)
     {
         if (e.Message.Channel.Id != Secrets.ChannelId) return Task.CompletedTask;
@@ -178,7 +152,8 @@ internal static class Program
         var liveMessageTracked = LiveMessageStorage.Get(e.Message.Id);
         if (liveMessageTracked != null)
         {
-            WriteLineWithPretext($"Message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
+            if (Config.Debug)
+                WriteLineWithPretext($"Live message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
             LiveMessageStorage.Remove(liveMessageTracked);
         }
         else if (liveMessageTracked == null)
@@ -186,7 +161,8 @@ internal static class Program
             var paginatedMessageTracked = LiveMessageStorage.GetPaginated(e.Message.Id);
             if (paginatedMessageTracked != null)
             {
-                WriteLineWithPretext($"Paginated message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
+                if (Config.Debug)
+                    WriteLineWithPretext($"Paginated message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
                 LiveMessageStorage.Remove(e.Message.Id);
             }
         }
@@ -205,12 +181,18 @@ internal static class Program
 
         if (servers == null || servers.Data.Length == 0)
         {
-            WriteLineWithPretext("No servers found.");
+            WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
+            return;
+        }
+        
+        if (Config.MessageFormat == null)
+        {
+            WriteLineWithPretext("No embed mode enabled, because MessageFormat in the config is null.", OutputType.Error);
             return;
         }
         
         // When the config is set to consolidate embeds
-        if (_config.ConsolidateEmbeds)
+        if (Config.MessageFormat == MessageFormat.Consolidated)
         {
             StartEmbedUpdaterLoop(
                 EmbedUpdateMode.Consolidated,
@@ -229,21 +211,31 @@ internal static class Program
 
                     if (tracked != null)
                     {
-                        WriteLineWithPretext($"Updating message {tracked}");
                         var msg = await channel.GetMessageAsync((ulong)tracked);
                         if (EmbedHasChanged(uuids, embed))
+                        {
+                            if (Config.Debug)
+                                WriteLineWithPretext($"Updating message {tracked}");
                             await msg.ModifyAsync(embed);
+                        }
+                        else if (Config.Debug)
+                            WriteLineWithPretext("Message has not changed. Skipping.");
                     }
                     else
                     {
-                        var msg = await channel.SendMessageAsync(embed);
-                        LiveMessageStorage.Save(msg.Id);
+                        if (!Config.DryRun)
+                        {
+                            var msg = await channel.SendMessageAsync(embed);
+                            LiveMessageStorage.Save(msg.Id);
+                        }
                     }
-                });
+                },
+                delaySeconds: Config.ServerUpdateInterval + Random.Shared.Next(0, Config.ServerUpdateInterval / 2)
+            );
         }
         
         // When the config is set to paginate
-        if (_config.Paginate)
+        if (Config.MessageFormat == MessageFormat.Paginated)
         {
             StartEmbedUpdaterLoop(
                 EmbedUpdateMode.Paginated,
@@ -271,27 +263,35 @@ internal static class Program
                             // Keeps the current page index instead of resetting to 0
                             var currentIndex = pagedTracked.Value;
                             var updatedEmbed = embeds[currentIndex];
-
-                            WriteLineWithPretext($"Updating message {cacheEntry.Key} on page {currentIndex}");
+                            
                             var msg = await channel.GetMessageAsync(cacheEntry.Key);
 
                             if (EmbedHasChanged(uuids, updatedEmbed))
                             {
+                                if (Config.Debug)
+                                    WriteLineWithPretext($"Updating paginated message {cacheEntry.Key} on page {currentIndex}");
                                 await msg.ModifyAsync(updatedEmbed);
                             }
+                            else if (Config.Debug)
+                                WriteLineWithPretext("Message has not changed. Skipping.");
                         }
                         else
                         {
-                            var msg = await SendPaginatedMessageAsync(channel, embeds);
+                            if (!Config.DryRun)
+                            {
+                                var msg = await SendPaginatedMessageAsync(channel, embeds);
 
-                            LiveMessageStorage.Save(msg.Id, 0);
+                                LiveMessageStorage.Save(msg.Id, 0);
+                            }
                         }
                     }
-                });
+                },
+                delaySeconds: Config.ServerUpdateInterval + Random.Shared.Next(0, Config.ServerUpdateInterval / 2)
+            );
         }
         
-        // When the config is set to neither consolidate nor paginate
-        if (_config is { ConsolidateEmbeds: false, Paginate: false })
+        // When the config is set to PerServerMessages
+        if (Config.MessageFormat == MessageFormat.PerServer)
         {
             foreach (var server in servers.Data)
             {
@@ -313,17 +313,28 @@ internal static class Program
 
                         if (tracked != null)
                         {
-                            WriteLineWithPretext($"Updating message {tracked}");
                             var msg = await channel.GetMessageAsync((ulong)tracked);
-                            if (EmbedHasChanged(uuid, embed)) await msg.ModifyAsync(embed);
+                            if (EmbedHasChanged(uuid, embed))
+                            {
+                                if (Config.Debug)
+                                    WriteLineWithPretext($"Updating message {tracked}");
+                                await msg.ModifyAsync(embed);
+                            }
+                            else if (Config.Debug)
+                            {
+                                WriteLineWithPretext("Message has not changed. Skipping.");
+                            }
                         }
                         else
                         {
-                            var msg = await channel.SendMessageAsync(embed);
-                            LiveMessageStorage.Save(msg.Id);
+                            if (Config.DryRun)
+                            {
+                                var msg = await channel.SendMessageAsync(embed);
+                                LiveMessageStorage.Save(msg.Id);
+                            }
                         }
                     },
-                    delaySeconds: 10 + Random.Shared.Next(0, 3) // randomized per-server delay
+                    delaySeconds: Config.ServerUpdateInterval + Random.Shared.Next(0, 3) // randomized per-server delay
                 );
             }
         }

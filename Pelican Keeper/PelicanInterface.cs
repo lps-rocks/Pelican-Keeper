@@ -15,6 +15,12 @@ public static class PelicanInterface
     /// <returns>The server stats response</returns>
     internal static StatsResponse? GetServerStats(string? uuid)
     {
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
+            return null;
+        }
+        
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/" + uuid + "/resources");
         var response = CreateRequest(client, Program.Secrets.ClientToken);
 
@@ -32,17 +38,17 @@ public static class PelicanInterface
                 if (stats?.Attributes != null)
                     return stats;
 
-                Console.WriteLine("Stats response had null attributes.");
+                ConsoleExt.WriteLineWithPretext("Stats response had null attributes.");
             }
             else
             {
-                Console.WriteLine("Empty response content.");
+                ConsoleExt.WriteLineWithPretext("Empty response content.");
             }
         }
         catch (JsonException ex)
         {
-            Console.WriteLine("JSON deserialization error: " + ex.Message);
-            Console.WriteLine("Response content: " + response.Content);
+            ConsoleExt.WriteLineWithPretext("JSON deserialization error: " + ex.Message);
+            ConsoleExt.WriteLineWithPretext("Response content: " + response.Content);
         }
 
         return null;
@@ -72,8 +78,8 @@ public static class PelicanInterface
         }
         catch (JsonException ex)
         {
-            Console.WriteLine("JSON Error: " + ex.Message);
-            Console.WriteLine("JSON: " + response.Content);
+            ConsoleExt.WriteLineWithPretext("JSON Error: " + ex.Message);
+            ConsoleExt.WriteLineWithPretext("JSON: " + response.Content);
         }
 
         return null;
@@ -88,5 +94,94 @@ public static class PelicanInterface
     {
         List<StatsResponse?> stats = uuids.Select(GetServerStats).ToList();
         return stats.Where(s => s != null).ToList(); 
+    }
+
+    // This doesn't work for ARK, and most likely other games as well. I read it works for Minecraft, but I have to test it and other games.
+    internal static void SendGameServerCommand(string? uuid, string command)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            ConsoleExt.WriteLineWithPretext("Command is null or empty.", ConsoleExt.OutputType.Error);
+            return;
+        }
+        
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/");
+        var request = new RestRequest($"{uuid}/command", Method.Post);
+        
+        request.AddHeader("Authorization", $"Bearer {Program.Secrets.ClientToken}");
+        request.AddHeader("Content-Type", "application/json");
+
+        var body = new { signal = $"{command}" };
+        request.AddStringBody(JsonSerializer.Serialize(body), ContentType.Json);
+
+        var response = client.Execute(request);
+        if (Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext(response.Content);
+    }
+
+    public static void SendPowerCommand(string? uuid, string command)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            ConsoleExt.WriteLineWithPretext("Command is null or empty.", ConsoleExt.OutputType.Error);
+            return;
+        }
+        
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/");
+        var request = new RestRequest($"{uuid}/power", Method.Post);
+        
+        request.AddHeader("Authorization", $"Bearer {Program.Secrets.ClientToken}");
+        request.AddHeader("Content-Type", "application/json");
+
+        var body = new { signal = $"{command}" };
+        request.AddStringBody(JsonSerializer.Serialize(body), ContentType.Json);
+
+        var response = client.Execute(request);
+        if (Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext(response.Content);
+    }
+    
+    public static async Task<string?> SendGameServerCommandRcon(string ip, int port, string password, string command) //This needs to write to a list of uuids and RconService because I am going to instantiate the RconService and have it hold the information of the Rcon connection, and the list will tire the connection to the uuid.
+    {
+        RconService rcon = new RconService();
+
+        await rcon.Connect(ip, port);
+        bool authenticated = await rcon.AuthenticateAsync(password);
+        
+        if (authenticated)
+        {
+            if (Program.Config.Debug)
+                ConsoleExt.WriteLineWithPretext("RCON connection established successfully.");
+
+            string response = await rcon.SendCommandAsync(command);
+            
+            if (Program.Config.Debug)
+                ConsoleExt.WriteLineWithPretext($"RCON command response: {response}");
+            return response;
+        }
+        ConsoleExt.WriteLineWithPretext("RCON authentication failed.", ConsoleExt.OutputType.Error);
+        return null;
+    }
+
+    public static async Task<string?> SendA2SRequest(string ip, int port, string command)
+    {
+        A2SService a2S = new A2SService();
+        
+        await a2S.Connect(ip, port);
+        string response = await a2S.SendCommandAsync(command);
+        ConsoleExt.WriteLineWithPretext(response);
+        return response;
     }
 }

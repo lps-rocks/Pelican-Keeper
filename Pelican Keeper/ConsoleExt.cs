@@ -5,6 +5,9 @@ namespace Pelican_Keeper;
 
 public static class ConsoleExt
 {
+    public static bool ExceptionOccurred;
+    public static readonly List<Exception> Exceptions = new();
+    
     public enum OutputType
     {
         Error,
@@ -35,6 +38,8 @@ public static class ConsoleExt
         }
 
         if (exception == null) return length1 + length2;
+        ExceptionOccurred = true;
+        Exceptions.Add(exception);
         Console.WriteLine($"Exception: {exception.Message}");
         Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;
@@ -62,6 +67,8 @@ public static class ConsoleExt
         }
 
         if (exception == null) return length1 + length2;
+        ExceptionOccurred = true;
+        Exceptions.Add(exception);
         Console.WriteLine($"Exception: {exception.Message}");
         Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;

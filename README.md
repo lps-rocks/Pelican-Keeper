@@ -12,19 +12,19 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 > [!TIP]
 > This bot can be installed and run on the generic C# Egg on Pelican.
 
-| Feature                 | Description                                                                 | Supported |
-|-------------------------|-----------------------------------------------------------------------------|-----------|
-| CPU Usage               | Shows live CPU percentage                                                   | ✅        |
-| Memory Usage            | Displays RAM used by the server                                             | ✅        |
-| Disk Space              | Shows total disk usage                                                      | ✅        |
-| Network Stats           | RX/TX bandwidth tracking                                                    | ✅        |
-| Uptime                  | Displays how long the server has been running                               | ✅        |
-| Per Server Messages     | Puts each server in its own message (Subject to rate limitation)            | ✅        |
-| Consolidation           | Consolidates All Servers into one message (limited to 25 in a single embed) | ✅        |
-| Pagination              | Flip through multiple servers in one message                                | ✅        |
-| Custom Templates        | Use {{placeholders}} in your message template                               | ✅        |
-| Button navigation       | Navigate Paginated messages using buttons                                   | ✅        |
-| Auto Updates            | Messages update automatically every X seconds                               | ✅        |
+| Feature                 | Description                                                                 | Supported   |
+|-------------------------|-----------------------------------------------------------------------------|-------------|
+| CPU Usage               | Shows live CPU percentage                                                   | ✅           |
+| Memory Usage            | Displays RAM used by the server                                             | ✅           |
+| Disk Space              | Shows total disk usage                                                      | ✅           |
+| Network Stats           | RX/TX bandwidth tracking                                                    | ✅           |
+| Uptime                  | Displays how long the server has been running                               | ✅           |
+| Per Server Messages     | Puts each server in its own message (Subject to rate limitation)            | ✅           |
+| Consolidation           | Consolidates All Servers into one message (limited to 25 in a single embed) | ✅           |
+| Pagination              | Flip through multiple servers in one paginated message                      | ✅           |
+| Custom Templates        | Use {{placeholders}} in your message template for Message customization     | ✅           |
+| Button navigation       | Navigate Paginated messages using buttons                                   | ✅           |
+| Auto Updates            | Messages update automatically every X seconds                               | ✅           |
 | Player Count            | Show live player count from server (if supported)                           | ❌ (Planned) |
 | Server Joinable IP:Port | Show server joinable IP:Port                                                | ❌ (Planned) |
 
@@ -46,7 +46,7 @@ Set the following variables exactly like this
 ```
 ### Secrets
 
-Run the bot once or create the Secrets.json in the base directory you see when opening the Files tab, and fill out all the necessary information.
+Run the bot once or create the Secrets.json in the base directory you see when opening the Files tab and fill out all the necessary information.
 
 ## Setup Outside Pelican
 > [!TIP]
@@ -106,6 +106,8 @@ dotnet run --project "Pelican Keeper"
 
 > [!TIP]
 > The Config file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/Config.json).
+> This file is used to configure how the bot behaves and displays information in Discord.
+> You can edit this file to change the bot's behavior, changing it while the bot is running will not apply the changes until the next restart.
 
 The config.json file can be found in the installation folder, and for the moment you have two options
 
@@ -117,7 +119,7 @@ The config.json file can be found in the installation folder, and for the moment
 ```
 ### ConsolidateEmbeds
 
-> Consolidates all the server information into a single embed message if true. And if false, it will create an embed message for each game server you have on pelican.
+> Consolidate all the server information into a single embed message if true. And if false, it will create an embed message for each game server you have on pelican.
 > 
 > Note that you will run into discord rate limits if you have this option off, and you have a few game servers on pelican.
 
@@ -135,18 +137,19 @@ The config.json file can be found in the installation folder, and for the moment
 > [!TIP]
 > The Markdown file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/MessageMarkdown.txt).
 
-And The Markdown formatting used [Discord's](https://support.discord.com/hc/en-us/articles/210298617-Markdown-Text-101-Chat-Formatting-Bold-Italic-Underline) formatting with some slight modifications.<br>
+The Markdown formatting uses [Discord's](https://support.discord.com/hc/en-us/articles/210298617-Markdown-Text-101-Chat-Formatting-Bold-Italic-Underline) formatting with some slight modifications.<br>
 Anything marked with {{}} will be replaced with the variable name.<br>
 Finally, There is a special Tag called [Title] for the server Name to mark what is supposed to be the server name for special use in the title of the embed.
 
-| Variable     | Description                                      |
-|--------------|--------------------------------------------------|
-| ServerName   | Name of the server                               |
-| StatusIcon   | Icon that changes depending on the server status |
-| Status       | Status of the server (Offline/Starting/Running)  |
-| Cpu          | CPU usage of the server                          |
-| Memory       | Memory usage of the server                       |
-| Disk         | Disk space used by the server                    |
-| NetworkRx    | Inbound network traffic                          |
-| NetworkTx    | Outbound network traffic                         |
-| Uptime       | Uptime of the server                             |
+| Variable   | Description                                      |
+|------------|--------------------------------------------------|
+| Uuid       | UUID of the server                               |
+| ServerName | Name of the server                               |
+| StatusIcon | Icon that changes depending on the server status |
+| Status     | Status of the server (Offline/Starting/Running)  |
+| Cpu        | CPU usage of the server                          |
+| Memory     | Memory usage of the server                       |
+| Disk       | Disk space used by the server                    |
+| NetworkRx  | Inbound network traffic                          |
+| NetworkTx  | Outbound network traffic                         |
+| Uptime     | Uptime of the server                             |

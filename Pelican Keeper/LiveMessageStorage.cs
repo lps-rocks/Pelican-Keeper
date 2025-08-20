@@ -52,7 +52,7 @@ public static class LiveMessageStorage
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading live message cache: {ex.Message}");
+            WriteLineWithPretext("Error loading live message cache! It may be corrupt or not in the right format. Simple solution is to delete the MessageHistory.json file and letting the bot recreate it.", OutputType.Error, ex);
             Cache = new LiveMessageJsonStorage();
         }
     }
@@ -152,7 +152,8 @@ public static class LiveMessageStorage
         }
         catch (DSharpPlus.Exceptions.NotFoundException)
         {
-            WriteLineWithPretext("Message not found", OutputType.Warning);
+            if (Program.Config.Debug)
+                WriteLineWithPretext("Message not found", OutputType.Warning);
             return false;
         }
     }

@@ -1,4 +1,6 @@
-﻿namespace Pelican_Keeper;
+﻿using System.Text.Json;
+
+namespace Pelican_Keeper;
 
 using static ConsoleExt;
 
@@ -13,6 +15,7 @@ public static class FileManager
     {
         if (File.Exists(path))
         {
+            WriteLineWithPretext(path);
             return path;
         }
         return File.Exists(Path.Combine("/Pelican Keeper/",path)) ? Path.Combine("/Pelican Keeper/",path) : string.Empty;
@@ -50,4 +53,54 @@ public static class FileManager
         await writer.WriteAsync(defaultConfig);
     }
     
+    public static async Task<TemplateClasses.Secrets?> ReadSecretsFile()
+    {
+        string secretsPath = GetFilePath("Secrets.json");
+        
+        if (secretsPath == String.Empty)
+        {
+            await CreateSecretsFile();
+            return new TemplateClasses.Secrets();
+        }
+
+        TemplateClasses.Secrets? secrets;
+        try
+        {
+            var secretsJson = await File.ReadAllTextAsync(secretsPath);
+            secrets = JsonSerializer.Deserialize<TemplateClasses.Secrets>(secretsJson)!;
+        }
+        catch (Exception ex)
+        {
+            WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and nothing is misspelled. Check Secrets.json", OutputType.Error, ex);
+            return null;
+        }
+
+        Program.Secrets = secrets;
+        return secrets;
+    }
+    
+    public static async Task<TemplateClasses.Config?> ReadConfigFile()
+    {
+        string configPath = GetFilePath("Config.json");
+        
+        if (configPath == String.Empty)
+        {
+            await CreateConfigFile();
+        }
+        
+        TemplateClasses.Config? config;
+        try
+        {
+            var configJson = await File.ReadAllTextAsync(configPath);
+            config = JsonSerializer.Deserialize<TemplateClasses.Config>(configJson);
+        }
+        catch (Exception ex)
+        {
+            WriteLineWithPretext("Failed to load config. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
+            return null;
+        }
+        
+        Program.Config = config;
+        return config;
+    }
 }

@@ -1,0 +1,4 @@
+{
+  "RconPassword": "password",
+  "command": "ListPlayers"
+}

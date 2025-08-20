@@ -1,22 +1,34 @@
-﻿using System.Runtime.InteropServices.JavaScript;
-using DSharpPlus.Entities;
+﻿using DSharpPlus.Entities;
 
 namespace Pelican_Keeper;
 using static TemplateClasses;
 
-public class EmbedBuilderService : IEmbedBuilderService
+public class EmbedBuilderService
 {
     public Task<DiscordEmbed> BuildSingleServerEmbed(ServerResponse server, StatsResponse stats)
     {
+        var serverInfo = ServerMarkdown.ParseTemplate(server, stats);
+        
         var embed = new DiscordEmbedBuilder
         {
-            Title = $"🎮 Server: {server.Attributes.Name}",
+            Title = serverInfo.serverName,
             Color = DiscordColor.Azure
         };
-
-        AddStatFields(embed, stats);
-
-        ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+        
+        embed.AddField("\u200B", serverInfo.message, inline: true);
+        
+        if (Program.Config.DryRun)
+        {
+            ConsoleExt.WriteLineWithPretext(serverInfo.serverName);
+            ConsoleExt.WriteLineWithPretext(serverInfo.message);
+        }
+        
+        embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
+        if (Program.Config.Debug)
+        {
+            ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
+            ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+        }
         return Task.FromResult(embed.Build());
     }
 
@@ -33,11 +45,22 @@ public class EmbedBuilderService : IEmbedBuilderService
             var stats = statsList.ElementAtOrDefault(i);
             if (stats?.Attributes == null) continue;
 
-            var summary = ServerMarkdown.ParseTemplate(servers[i], stats);
-            embed.AddField(summary.serverName, summary.message, inline: true);
+            var serverInfo = ServerMarkdown.ParseTemplate(servers[i], stats);
+            embed.AddField(serverInfo.serverName, serverInfo.message, inline: true);
+            
+            if (Program.Config.DryRun)
+            {
+                ConsoleExt.WriteLineWithPretext(serverInfo.serverName);
+                ConsoleExt.WriteLineWithPretext(serverInfo.message);
+            }
         }
-
-        ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+        
+        embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
+        if (Program.Config.Debug)
+        {
+            ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
+            ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+        }
         return Task.FromResult(embed.Build());
     }
 
@@ -60,46 +83,29 @@ public class EmbedBuilderService : IEmbedBuilderService
             };
 
             embed.AddField("\u200B", serverInfo.message,true);
-            ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+            
+            if (Program.Config.DryRun)
+            {
+                ConsoleExt.WriteLineWithPretext(serverInfo.serverName);
+                ConsoleExt.WriteLineWithPretext(serverInfo.message);
+            }
+            
+            embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
+            if (Program.Config.Debug)
+            {
+                ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
+                ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
+            }
             embeds.Add(embed.Build());
         }
         
         return Task.FromResult(embeds);
     }
-
-    private void AddStatFields(DiscordEmbedBuilder embed, StatsResponse stats)
-    {
-        var attr = stats.Attributes;
-        var res = attr.Resources;
-
-        string icon = EmbedBuilderHelper.GetStatusIcon(attr.CurrentState);
-        embed.SafeAddField($"{icon} **Status**", attr.CurrentState, true);
-        embed.SafeAddField("🧠 **Memory:**", EmbedBuilderHelper.FormatBytes(res.MemoryBytes), true);
-        embed.SafeAddField("🖥️ **CPU:**", $"{res.CpuAbsolute:0.00}%", true);
-        embed.SafeAddField("💽 **Disk:**", EmbedBuilderHelper.FormatBytes(res.DiskBytes), true);
-        embed.SafeAddField("📥 **Network RX:**", EmbedBuilderHelper.FormatBytes(res.NetworkRxBytes), true);
-        embed.SafeAddField("📤 **Network TX:**", EmbedBuilderHelper.FormatBytes(res.NetworkTxBytes), true);
-        embed.SafeAddField("⏳ **Uptime:**", EmbedBuilderHelper.FormatUptime(res.Uptime), true);
-    }
-
-    private string FormatSummary(StatsResponse stats)
-    {
-        var attr = stats.Attributes;
-        var res = attr.Resources;
-        string icon = EmbedBuilderHelper.GetStatusIcon(attr.CurrentState);
-
-        return $"{icon} **Status:** {attr.CurrentState}\n" +
-               $"🧠 **Memory:** {EmbedBuilderHelper.FormatBytes(res.MemoryBytes)}\n" +
-               $"🖥️ **CPU:** {res.CpuAbsolute:0.00}%\n" +
-               $"💽 **Disk:** {EmbedBuilderHelper.FormatBytes(res.DiskBytes)}\n" +
-               $"📥 **Network RX:** {EmbedBuilderHelper.FormatBytes(res.NetworkRxBytes)}\n" +
-               $"📤 **Network TX:** {EmbedBuilderHelper.FormatBytes(res.NetworkTxBytes)}\n" +
-               $"⏳ **Uptime:** {EmbedBuilderHelper.FormatUptime(res.Uptime)}";
-    }
 }
 
 public static class EmbedBuilderHelper
 {
+    // Keeping for future reference, if needed. Currently not used or planned to be used.
     public static void SafeAddField(this DiscordEmbedBuilder builder, string name, string? value, bool inline = false)
     {
         builder.AddField(name, string.IsNullOrEmpty(value) ? "N/A" : value, inline);

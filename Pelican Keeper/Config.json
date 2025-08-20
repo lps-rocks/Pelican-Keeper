@@ -1,4 +1,30 @@
 ﻿{
-  "ConsolidateEmbeds": true,
-  "Paginate": false
+  "InternalIpStructure": "192.168.*.*",
+  "MessageFormat": "Consolidated",
+  "MessageSorting": "None",
+  "MessageSortingDirection": "Descending",
+  "IgnoreOfflineServers": false,
+  "ServersToIgnore": ["UUIDS HERE"],
+  "CommandExecutionMethod": "Rcon",
+  
+  "JoinableIpDisplay": false,
+  "PlayerCountDisplay": false,
+  
+  "AutomaticShutdown": false,
+  "EmptyServerTimeout": "00:00",
+  "AllowUserServerStartup": false,
+  
+  "ContinuesMarkdownRead": true,
+  "MarkdownUpdateInterval": 30,
+  "ServerUpdateInterval": 10,
+  
+  "LimitServerCount": false,
+  "MaxServerCount": 10,
+  "ServersToDisplay": ["UUIDS HERE"],
+  
+  "EnableRcon": false,
+  "RconServersToMonitor": ["UUIDS HERE"],
+  
+  "Debug": false,
+  "DryRun": false
 }
