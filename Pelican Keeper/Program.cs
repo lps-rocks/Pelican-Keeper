@@ -38,7 +38,8 @@ internal static class Program
             Console.WriteLine("MessageMarkdown.txt not found. Creating default one.");
             _ = FileManager.CreateMessageMarkdownFile();
         }
-        
+
+        GetServersToMonitorFileAsync();
         ServerMarkdown.GetMarkdownFileContentAsync();
 
         var discord = new DiscordClient(new DiscordConfiguration
@@ -177,13 +178,6 @@ internal static class Program
     private static async Task StartStatsUpdater(DiscordClient client, ulong channelId)
     {
         var channel = await client.GetChannelAsync(channelId);
-        var servers = GetServersList();
-
-        if (servers == null || servers.Data.Length == 0)
-        {
-            WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
-            return;
-        }
         
         if (Config.MessageFormat == null)
         {
@@ -198,10 +192,13 @@ internal static class Program
                 EmbedUpdateMode.Consolidated,
                 async () =>
                 {
-                    var serversList = servers.Data.ToList();
-                    var uuids = serversList.Select(s => s.Attributes.Uuid).ToList();
-                    var stats = GetServerStatsList(uuids);
-                    var embed = await EmbedService.BuildMultiServerEmbed(serversList, stats);
+                    var serversList = GetServersList();
+                    if (serversList.Count == 0)
+                    {
+                        WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
+                    }
+                    var uuids = serversList.Select(s => s.Uuid).ToList();
+                    var embed = await EmbedService.BuildMultiServerEmbed(serversList);
                     return (uuids, embed);
                 },
                 async (embedObj, uuids) =>
@@ -241,10 +238,13 @@ internal static class Program
                 EmbedUpdateMode.Paginated,
                 async () =>
                 {
-                    var serversList = servers.Data.ToList();
-                    var uuids = serversList.Select(s => s.Attributes.Uuid).ToList();
-                    var stats = GetServerStatsList(uuids);
-                    var embeds = await EmbedService.BuildPaginatedServerEmbeds(serversList, stats);
+                    var serversList = GetServersList();
+                    if (serversList.Count == 0)
+                    {
+                        WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
+                    }
+                    var uuids = serversList.Select(s => s.Uuid).ToList();
+                    var embeds = await EmbedService.BuildPaginatedServerEmbeds(serversList);
                     return (uuids, embeds);
                 },
                 async (embedObj, uuids) =>
@@ -293,17 +293,21 @@ internal static class Program
         // When the config is set to PerServerMessages
         if (Config.MessageFormat == MessageFormat.PerServer)
         {
-            foreach (var server in servers.Data)
+            var serversList = GetServersList();
+            if (serversList.Count == 0)
+            {
+                WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
+                return;
+            }
+            foreach (var server in serversList)
             {
                 StartEmbedUpdaterLoop(
                     EmbedUpdateMode.PerServer,
                     async () =>
                     {
-                        var uuid = server.Attributes.Uuid;
-                        var stats = GetServerStats(uuid);
-                        if (stats == null) return ([uuid], null!);
+                        var uuid = server.Uuid;
 
-                        var embed = await EmbedService.BuildSingleServerEmbed(server, stats);
+                        var embed = await EmbedService.BuildSingleServerEmbed(server);
                         return ([uuid], embed);
                     },
                     async (embedObj, uuid) =>

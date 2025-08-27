@@ -25,9 +25,9 @@ public class A2STesting
 
         ConsoleExt.WriteLineWithPretext(_config.MessageFormat);
 
-        if (_secrets.ExternalIp != null)
+        if (_secrets.ExternalServerIp != null)
         {
-            await PelicanInterface.SendA2SRequest(_secrets.ExternalIp, 27051, "listplayers"); // should load these from the secrets file and the information provided by the pelican API
+            await PelicanInterface.SendA2SRequest(_secrets.ExternalServerIp, 27051, "listplayers"); // should load these from the secrets file and the information provided by the pelican API
         }
         
         if (ConsoleExt.ExceptionOccurred)

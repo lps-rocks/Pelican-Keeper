@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <IsPublishable>false</IsPublishable>
         <TargetFramework>net9.0</TargetFramework>
         <RootNamespace>Pelican_Keeper_Unit_Testing</RootNamespace>
         <LangVersion>latest</LangVersion>
@@ -27,9 +28,6 @@
 
     <ItemGroup>
       <None Update="Secrets.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-      <None Update="Config.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
     </ItemGroup>

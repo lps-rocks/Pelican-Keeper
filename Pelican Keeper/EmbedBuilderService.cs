@@ -5,9 +5,9 @@ using static TemplateClasses;
 
 public class EmbedBuilderService
 {
-    public Task<DiscordEmbed> BuildSingleServerEmbed(ServerResponse server, StatsResponse stats)
+    public Task<DiscordEmbed> BuildSingleServerEmbed(ServerInfo server)
     {
-        var serverInfo = ServerMarkdown.ParseTemplate(server, stats);
+        var serverInfo = ServerMarkdown.ParseTemplate(server);
         
         var embed = new DiscordEmbedBuilder
         {
@@ -23,16 +23,19 @@ public class EmbedBuilderService
             ConsoleExt.WriteLineWithPretext(serverInfo.message);
         }
         
-        embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
-        if (Program.Config.Debug)
+        embed.Footer = new DiscordEmbedBuilder.EmbedFooter
         {
-            ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
-            ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
-        }
+            Text = $"Last Updated: {DateTime.Now:HH:mm:ss}"
+        };
+        
+        if (!Program.Config.Debug) return Task.FromResult(embed.Build());
+        
+        ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
+        ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
         return Task.FromResult(embed.Build());
     }
 
-    public Task<DiscordEmbed> BuildMultiServerEmbed(List<ServerResponse> servers, List<StatsResponse?> statsList)
+    public Task<DiscordEmbed> BuildMultiServerEmbed(List<ServerInfo> servers) //TODO: Add the ability to use the game icon as the emoji next to the server name
     {
         var embed = new DiscordEmbedBuilder
         {
@@ -42,10 +45,7 @@ public class EmbedBuilderService
 
         for (int i = 0; i < servers.Count && embed.Fields.Count < 25; i++)
         {
-            var stats = statsList.ElementAtOrDefault(i);
-            if (stats?.Attributes == null) continue;
-
-            var serverInfo = ServerMarkdown.ParseTemplate(servers[i], stats);
+            var serverInfo = ServerMarkdown.ParseTemplate(servers[i]);
             embed.AddField(serverInfo.serverName, serverInfo.message, inline: true);
             
             if (Program.Config.DryRun)
@@ -55,26 +55,27 @@ public class EmbedBuilderService
             }
         }
         
-        embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
-        if (Program.Config.Debug)
+        embed.Footer = new DiscordEmbedBuilder.EmbedFooter
         {
-            ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
-            ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
-        }
+            Text = $"Last Updated: {DateTime.Now:HH:mm:ss}"
+        };
+        
+        if (!Program.Config.Debug) return Task.FromResult(embed.Build());
+        
+        ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));
+        ConsoleExt.WriteLineWithPretext($"Embed character count: {EmbedBuilderHelper.GetEmbedCharacterCount(embed)}");
         return Task.FromResult(embed.Build());
     }
 
-    public Task<List<DiscordEmbed>> BuildPaginatedServerEmbeds(List<ServerResponse> servers, List<StatsResponse?> statsList)
+    public Task<List<DiscordEmbed>> BuildPaginatedServerEmbeds(List<ServerInfo> servers)
     {
         var embeds = new List<DiscordEmbed>();
 
         for (int i = 0; i < servers.Count; i++)
         {
             var server = servers[i];
-            var stats = statsList.ElementAtOrDefault(i);
-            if (stats?.Attributes == null) continue;
 
-            var serverInfo = ServerMarkdown.ParseTemplate(server, stats);
+            var serverInfo = ServerMarkdown.ParseTemplate(server);
 
             var embed = new DiscordEmbedBuilder
             {
@@ -90,7 +91,10 @@ public class EmbedBuilderService
                 ConsoleExt.WriteLineWithPretext(serverInfo.message);
             }
             
-            embed.AddField("\u200B", $"Last Updated: {DateTime.Now:HH:mm:ss}");
+            embed.Footer = new DiscordEmbedBuilder.EmbedFooter
+            {
+                Text = $"Last Updated: {DateTime.Now:HH:mm:ss}"
+            };
             if (Program.Config.Debug)
             {
                 ConsoleExt.WriteLineWithPretext("Last Updated: " + DateTime.Now.ToString("HH:mm:ss"));

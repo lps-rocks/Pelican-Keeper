@@ -4,12 +4,12 @@ using System.Text;
 
 namespace Pelican_Keeper;
 
-public class A2SService : ISendCommand
+public class A2SService(string ip, int port) : ISendCommand
 {
     private UdpClient? _udpClient;
     private IPEndPoint? _endPoint;
 
-    public Task Connect(string ip, int port)
+    public Task Connect()
     {
         _udpClient = new UdpClient();
         _endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
@@ -59,6 +59,9 @@ public class A2SService : ISendCommand
             ConsoleExt.WriteLineWithPretext("Failed to parse response.", ConsoleExt.OutputType.Error);
             return "Failed to parse response.";
         }
+        
+        if (Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext($"A2S request response: {parseResult}");
         
         return parseResult;
     }

@@ -3,20 +3,29 @@ using System.Text;
 
 namespace Pelican_Keeper;
 
-public class RconService : ISendCommand
+public class RconService(string ip, int port, string password) : ISendCommand
 {
     private TcpClient? _tcpClient;
     private NetworkStream? _stream;
     private int _requestId;
+
+    public readonly string Ip = ip;
+    public readonly int Port = port;
     
-    public async Task Connect(string ip, int port)
+    public async Task Connect()
     {
         _tcpClient = new TcpClient();
-        await _tcpClient.ConnectAsync(ip, port);
+        await _tcpClient.ConnectAsync(Ip, Port);
         _stream = _tcpClient.GetStream();
+        
+        bool authenticated = await AuthenticateAsync();
+        if (authenticated && Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext("RCON connection established successfully.");
+        else
+            ConsoleExt.WriteLineWithPretext("RCON authentication failed.", ConsoleExt.OutputType.Error, new UnauthorizedAccessException());
     }
 
-    public async Task<bool> AuthenticateAsync(string password)
+    private async Task<bool> AuthenticateAsync()
     {
         _requestId++;
         byte[] packet = CreatePacket(_requestId, 3, password);
@@ -33,6 +42,8 @@ public class RconService : ISendCommand
         await _stream!.WriteAsync(packet);
 
         var response = await ReadResponseAsync();
+        if (Program.Config.Debug)
+            ConsoleExt.WriteLineWithPretext($"RCON command response: {response.body}");
         return response.body;
     }
 

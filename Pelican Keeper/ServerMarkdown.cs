@@ -5,7 +5,7 @@ namespace Pelican_Keeper;
 public static class ServerMarkdown
 {
     private record PreprocessedTemplate(string Body, Dictionary<string, string> Tags);
-    private static readonly string MessageMarkdownPath = FileManager.GetFilePath("MessageMarkdown.txt");
+    private static readonly string MessageMarkdownPath = FileManager.GetFilePath("MessageMarkdown.txt"); //TODO: Add error handling for missing file and Validation for correct format
     private static string _templateText = File.ReadAllText(MessageMarkdownPath);
 
     /// <summary>
@@ -46,12 +46,9 @@ public static class ServerMarkdown
         {
             var propName = match.Groups[1].Value;
             var prop = model.GetType().GetProperty(propName);
-            if (prop != null)
-            {
-                var value = prop.GetValue(model);
-                return value?.ToString() ?? "";
-            }
-            return match.Value; // leaves the placeholder as-is if not found
+            if (prop == null) return match.Value; // leaves the placeholder as-is if not found
+            var value = prop.GetValue(model);
+            return value?.ToString() ?? "";
         });
     }
 
@@ -59,26 +56,33 @@ public static class ServerMarkdown
     /// Parses the message template and returns the final message and server title.
     /// </summary>
     /// <param name="serverResponse">The server response</param>
-    /// <param name="statsResponse">The stats' response</param>
     /// <returns>A tuple containing the final message and server title</returns>
-    public static (string message, string serverName) ParseTemplate(
-        TemplateClasses.ServerResponse serverResponse,
-        TemplateClasses.StatsResponse statsResponse)
+    public static (string message, string serverName) ParseTemplate(TemplateClasses.ServerInfo serverResponse)
     {
+        if (serverResponse.Resources == null)
+        {
+            throw new ArgumentException("Server Resource response cannot be null.");
+        }
+        
         var viewModel = new TemplateClasses.ServerViewModel
         {
-            //IpAndPort = 
-            Uuid = serverResponse.Attributes.Uuid,
-            ServerName = serverResponse.Attributes.Name,
-            Status = statsResponse.Attributes.CurrentState,
-            StatusIcon = EmbedBuilderHelper.GetStatusIcon(statsResponse.Attributes.CurrentState),
-            Cpu = $"{statsResponse.Attributes.Resources.CpuAbsolute:0.00}%",
-            Memory = EmbedBuilderHelper.FormatBytes(statsResponse.Attributes.Resources.MemoryBytes),
-            Disk = EmbedBuilderHelper.FormatBytes(statsResponse.Attributes.Resources.DiskBytes),
-            NetworkRx = EmbedBuilderHelper.FormatBytes(statsResponse.Attributes.Resources.NetworkRxBytes),
-            NetworkTx = EmbedBuilderHelper.FormatBytes(statsResponse.Attributes.Resources.NetworkTxBytes),
-            Uptime = EmbedBuilderHelper.FormatUptime(statsResponse.Attributes.Resources.Uptime)
+            //PlayerCount = 
+            Uuid = serverResponse.Uuid,
+            ServerName = serverResponse.Name,
+            Status = serverResponse.Resources.CurrentState,
+            StatusIcon = EmbedBuilderHelper.GetStatusIcon(serverResponse.Resources.CurrentState),
+            Cpu = $"{serverResponse.Resources.CpuAbsolute:0.00}%",
+            Memory = EmbedBuilderHelper.FormatBytes(serverResponse.Resources.MemoryBytes),
+            Disk = EmbedBuilderHelper.FormatBytes(serverResponse.Resources.DiskBytes),
+            NetworkRx = EmbedBuilderHelper.FormatBytes(serverResponse.Resources.NetworkRxBytes),
+            NetworkTx = EmbedBuilderHelper.FormatBytes(serverResponse.Resources.NetworkTxBytes),
+            Uptime = EmbedBuilderHelper.FormatUptime(serverResponse.Resources.Uptime)
         };
+
+        if (Program.Config.JoinableIpDisplay)
+        {
+            viewModel.IpAndPort = HelperClass.GetConnectableAddress(serverResponse);
+        }
 
         var result = PreprocessTemplateTags(viewModel);
         var serverName = result.Tags.GetValueOrDefault("Title", "Default Title");

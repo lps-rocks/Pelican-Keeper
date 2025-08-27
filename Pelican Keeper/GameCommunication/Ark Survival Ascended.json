@@ -1,5 +1,0 @@
-{
-  "Protocol": "RCON",
-  "RconPassword": "password",
-  "Command": "listplayers"
-}

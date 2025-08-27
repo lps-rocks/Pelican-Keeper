@@ -1,5 +1,6 @@
 [Title]🎮 **{{ServerName}}**[/Title]
 
+{{IpAndPort}}
 {{StatusIcon}} **Status:** {{Status}}
 🖥️ **CPU:** {{Cpu}}
 🧠 **Memory:** {{Memory}}

@@ -2,7 +2,7 @@
 
 public interface ISendCommand
 {
-    public Task Connect(string ip, int port);
+    public Task Connect();
     
     public Task<string> SendCommandAsync(string command);
 }

@@ -27,12 +27,31 @@ public abstract class TemplateClasses
         Ascending,
         Descending
     }
-
+    
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum CommandExecutionMethod
     {
+        PelicanApi,
         Rcon,
         A2S
+    }
+    
+    // need to implement this in the future
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum OutputSortingDirection
+    {
+        Ascending,
+        Descending
+    }
+    
+    // need to implement this in the future
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum OutputSortingType
+    {
+        None,
+        Id,
+        Status,
+        Name
     }
     
     public class Secrets
@@ -42,7 +61,7 @@ public abstract class TemplateClasses
         public string? ServerUrl { get; init; }
         public string? BotToken { get; init; }
         public ulong ChannelId { get; init; }
-        public string? ExternalIp { get; init; }
+        public string? ExternalServerIp { get; init; }
     }
     
     public class Config
@@ -53,7 +72,6 @@ public abstract class TemplateClasses
         public MessageSortingDirection? MessageSortingDirection { get; init; }
         public bool IgnoreOfflineServers { get; init; }
         public string[]? ServersToIgnore { get; init; }
-        public CommandExecutionMethod? CommandExecutionMethod { get; init; }
         
         public bool JoinableIpDisplay { get; init; }
         public bool PlayerCountDisplay { get; init; }
@@ -63,6 +81,7 @@ public abstract class TemplateClasses
         public bool AllowUserServerStartup { get; init; }
         
         public bool ContinuesMarkdownRead { get; init; }
+        public bool ContinuesServerToMonitorRead { get; init; }
         public int MarkdownUpdateInterval { get; init; }
         private readonly int _serverUpdateInterval;
         public int ServerUpdateInterval
@@ -75,60 +94,38 @@ public abstract class TemplateClasses
         public int MaxServerCount { get; init; }
         public string[]? ServersToDisplay { get; init; }
         
-        public bool EnableRcon { get; init; }
-        public string[]? RconServersToMonitor { get; init; }
+        public bool EnablePlayerMonitor { get; init; }
         
         public bool Debug { get; init; }
         public bool DryRun { get; init; }
     }
-
-    public class ServerListResponse
+    
+    public class ServerInfo
     {
-        public string Object { get; set; }
-        public ServerResponse[] Data { get; set; }
+        public int Id { get; init; }
+        public string Uuid { get; init; } = null!;
+        public string Name { get; init; } = null!;
+        public ServerResources? Resources { get; set; }
+        public List<ServerAllocation>? Allocations { get; set; }
+        public string? PlayerCountText { get; set; }
     }
 
-    public class ServerResponse
+    public class ServerResources
     {
-        public string Object { get; set; }
-        public ServerAttributes Attributes { get; set; }
+        public string CurrentState { get; init; } = null!;
+        public long MemoryBytes { get; init; }
+        public double CpuAbsolute { get; init; }
+        public long DiskBytes { get; init; }
+        public long NetworkRxBytes { get; init; }
+        public long NetworkTxBytes { get; init; }
+        public long Uptime { get; init; }
     }
     
-    public class ServerAttributes
+    public class ServerAllocation
     {
-        public int Id { get; set; }
-        public string? Uuid { get; set; }
-        public string Name { get; set; }
-    }
-
-    public class StatsResponse
-    {
-        public string Object { get; set; }
-        public StatsAttributes Attributes { get; set; }
-    }
-    
-    public class StatsAttributes
-    {
-        [JsonPropertyName("current_state")] public string CurrentState { get; set; }
-
-        [JsonPropertyName("is_suspended")] public bool IsSuspended { get; set; }
-
-        public StatsResources Resources { get; set; }
-    }
-
-    public class StatsResources
-    {
-        [JsonPropertyName("memory_bytes")] public long MemoryBytes { get; set; }
-
-        [JsonPropertyName("cpu_absolute")] public double CpuAbsolute { get; set; }
-
-        [JsonPropertyName("disk_bytes")] public long DiskBytes { get; set; }
-
-        [JsonPropertyName("network_rx_bytes")] public long NetworkRxBytes { get; set; }
-
-        [JsonPropertyName("network_tx_bytes")] public long NetworkTxBytes { get; set; }
-
-        public long Uptime { get; set; }
+        public string Ip { get; init; } = null!;
+        public int Port { get; init; }
+        public bool IsDefault { get; init; }
     }
     
     public class LiveMessageJsonStorage
@@ -139,6 +136,7 @@ public abstract class TemplateClasses
     
     public class ServerViewModel
     {
+        public string PlayerCount { get; set; } = null!;
         public string IpAndPort { get; set; } = null!;
         public string? Uuid { get; set; }
         public string ServerName { get; init; } = null!;
@@ -152,24 +150,16 @@ public abstract class TemplateClasses
         public string Uptime { get; set; } = null!;
     }
     
-    public class GameCommunicationJson
+    public class ServersToMonitor
     {
+        public string Uuid { get; set; } = null!;
         public CommandExecutionMethod Protocol { get; set; }
-        public string RconPassword { get; set; } = null!;
-        public string Command { get; set; } = null!;
-    }
-
-    public enum OutputSortingDirection
-    {
-        Ascending,
-        Descending
-    }
-    
-    public enum OutputSortingType
-    {
-        None,
-        Id,
-        Status,
-        Name
+        public string? RconPortVariable { get; set; }
+        public int? RconPort { get; set; }
+        public string? RconPasswordVariable { get; set; }
+        public string? RconPassword { get; set; }
+        public string? Command { get; set; }
+        public string? QueryPortVariable { get; set; }
+        public int? QueryPort { get; set; }
     }
 }

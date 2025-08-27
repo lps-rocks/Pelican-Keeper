@@ -15,7 +15,6 @@ public static class FileManager
     {
         if (File.Exists(path))
         {
-            WriteLineWithPretext(path);
             return path;
         }
         return File.Exists(Path.Combine("/Pelican Keeper/",path)) ? Path.Combine("/Pelican Keeper/",path) : string.Empty;
@@ -24,7 +23,7 @@ public static class FileManager
     /// <summary>
     /// Creates a default Secrets.json file in the current execution directory.
     /// </summary>
-    public static async Task CreateSecretsFile()
+    private static async Task CreateSecretsFile()
     {
         WriteLineWithPretext("Secrets.json not found. Creating default one.", OutputType.Warning);
         await using var secretsFile = File.Create("Secrets.json");
@@ -37,10 +36,10 @@ public static class FileManager
     /// <summary>
     /// Creates a default Config.json file in the current execution directory.
     /// </summary>
-    public static async Task CreateConfigFile()
+    private static async Task CreateConfigFile()
     {
         await using var configFile = File.Create("Config.json");
-        var defaultConfig = new string("{\n  \"ConsolidateEmbeds\": true,\n  \"Paginate\": false\n}");
+        var defaultConfig = new string("{\n  \"InternalIpStructure\": \"192.168.*.*\",\n  \"MessageFormat\": \"Consolidated\",\n  \"MessageSorting\": \"None\",\n  \"MessageSortingDirection\": \"Descending\",\n  \"IgnoreOfflineServers\": false,\n  \"ServersToIgnore\": [\"UUIDS HERE\"],\n  \n  \"JoinableIpDisplay\": true,\n  \"PlayerCountDisplay\": false,\n  \n  \"AutomaticShutdown\": false,\n  \"EmptyServerTimeout\": \"00:00\",\n  \"AllowUserServerStartup\": false,\n  \n  \"ContinuesMarkdownRead\": true,\n  \"MarkdownUpdateInterval\": 30,\n  \"ServerUpdateInterval\": 10,\n  \n  \"LimitServerCount\": false,\n  \"MaxServerCount\": 10,\n  \"ServersToDisplay\": [\"UUIDS HERE\"],\n  \n  \"EnablePlayerMonitor\": false,\n  \n  \"Debug\": false,\n  \"DryRun\": false\n}");
         await using var writer = new StreamWriter(configFile);
         await writer.WriteAsync(defaultConfig);
     }
@@ -60,7 +59,7 @@ public static class FileManager
         if (secretsPath == String.Empty)
         {
             await CreateSecretsFile();
-            return new TemplateClasses.Secrets();
+            return null;
         }
 
         TemplateClasses.Secrets? secrets;
@@ -71,7 +70,7 @@ public static class FileManager
         }
         catch (Exception ex)
         {
-            WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and nothing is misspelled. Check Secrets.json", OutputType.Error, ex);
+            WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and is in the correct format. Check Secrets.json", OutputType.Error, ex);
             return null;
         }
 
@@ -100,7 +99,37 @@ public static class FileManager
             return null;
         }
         
+        if (config == null)
+        {
+            WriteLineWithPretext("Config file is empty or not in the correct format. Please check Config.json", OutputType.Error);
+            return null;
+        }
+        
         Program.Config = config;
         return config;
+    }
+    
+    public static async Task<List<TemplateClasses.ServersToMonitor>?> ReadGameCommunicationFile()
+    {
+        string gameCommPath = GetFilePath("ServersToMonitor.json");
+        
+        if (gameCommPath == String.Empty)
+        {
+            WriteLineWithPretext("ServersToMonitor.json not found. Creating default one.", OutputType.Error);
+            return null;
+        }
+
+        try
+        {
+            var gameCommJson = await File.ReadAllTextAsync(gameCommPath);
+            var gameComms = JsonSerializer.Deserialize<List<TemplateClasses.ServersToMonitor>>(gameCommJson);
+            return gameComms;
+        }
+        catch (Exception ex)
+        {
+            WriteLineWithPretext(
+                "Failed to load ServersToMonitor.json. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
+            return null;
+        }
     }
 }

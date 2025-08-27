@@ -1,77 +1,121 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
-name: .NET
+name: .NET Multi-RID Publish
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-
+  check-version:
     runs-on: ubuntu-latest
-    permissions: write-all
-    strategy:
-      matrix:
-        dotnet-version: [ '8.x' ]
-
+    outputs:
+      valid: ${{ steps.check_version.outputs.valid }}
+      version: ${{ steps.get_commit.outputs.title }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Get last commit message
-      id: get_commit
-      run: |
-        TITLE=$(git log -1 --pretty=%s)
-        echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
 
-    - name: Check if commit is version tag (X.Y.Z)
-      id: check_version
-      run: |
-        if [[ "${{ steps.get_commit.outputs.title }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "valid=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "valid=false" >> "$GITHUB_OUTPUT"
-        fi
-    - name: Setup .NET ${{ matrix.dotnet-version }}
-      if: steps.check_version.outputs.valid == 'true'
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ matrix.dotnet-version }}
-    
-    - name: Restore dependencies
-      if: steps.check_version.outputs.valid == 'true'
-      run: dotnet restore
-    
-    - name: Test Build
-      if: steps.check_version.outputs.valid == 'true'
-      run: dotnet build --no-restore
-    
-    - name: Create Release Zip
-      if: steps.check_version.outputs.valid == 'true'
-      uses: thedoctor0/zip-release@master
-      with:
-        filename: 'Release.zip'
-        exclusions: '*.git* /*.idea/* *.md *.sln global.json LICENSE /*bin/*'
-    
-    - name: Create Release
-      if: steps.check_version.outputs.valid == 'true'
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: Pelican-Keeper-v$${{ steps.get_commit.outputs.title }}
-        release_name: Pelican-Keeper-v${{ steps.get_commit.outputs.title }}
-    
-    - name: Upload Release Asset
-      if: steps.check_version.outputs.valid == 'true'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./Release.zip
-        asset_name: Release.zip
-        asset_content_type: application/zip
+      - name: Get last commit message
+        id: get_commit
+        run: |
+          TITLE=$(git log -1 --pretty=%s)
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+
+      - name: Check if commit is version tag (X.Y.Z)
+        id: check_version
+        run: |
+          if [[ "${{ steps.get_commit.outputs.title }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  create-release:
+    needs: check-version
+    if: needs.check-version.outputs.valid == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          release_name: v${{ needs.check-version.outputs.version }}
+          draft: false
+          prerelease: false
+
+  publish-and-upload:
+    needs: [check-version, create-release]
+    if: needs.check-version.outputs.valid == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid:
+          - win-x86
+          - win-x64
+          - linux-x64
+          - linux-arm64
+          - osx-x64
+          - osx-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect solution
+        id: detect
+        run: |
+          set -e
+          SOLN=$(ls -1 *.sln 2>/dev/null | head -n1)
+          if [ -z "$SOLN" ]; then
+            echo "No .sln found at repo root. Place the workflow at the root or add a step to cd into the directory with your solution." >&2
+            exit 1
+          fi
+          echo "sln=$SOLN" >> "$GITHUB_OUTPUT"
+          echo "Found solution: $SOLN"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Restore
+        run: dotnet restore "${{ steps.detect.outputs.sln }}"
+
+      - name: Build
+        run: dotnet build --no-restore "${{ steps.detect.outputs.sln }}"
+
+      - name: Publish (${{ matrix.rid }})
+        run: |
+          OUTDIR="dist/${{ matrix.rid }}"
+          mkdir -p "$OUTDIR"
+          dotnet publish "${{ steps.detect.outputs.sln }}" \
+            -c Release -r ${{ matrix.rid }} --no-restore --nologo \
+            -o "$OUTDIR"
+          echo "OUTDIR=$OUTDIR" >> "$GITHUB_ENV"
+
+      - name: Zip publish output (${{ matrix.rid }})
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          NAME="release-v${VERSION}-${{ matrix.rid }}.zip"
+          cd "$OUTDIR"
+          zip -r "../$NAME" .
+          echo "ZIP=dist/$NAME" >> $GITHUB_ENV
+
+      - name: Upload Release Asset (${{ matrix.rid }})
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ env.ZIP }}
+          asset_name: ${{ env.APP_NAME }}-v${{ needs.check-version.outputs.version }}-${{ matrix.rid }}.zip
+          asset_content_type: application/zip

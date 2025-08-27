@@ -1,5 +1,6 @@
 <p align="center">
   <img src="https://github.com/user-attachments/assets/3eb050aa-40c6-496f-94a3-8404987a6bf6"/><br>
+    <strong>Support me and my projects</strong><br>
   <a href="https://ko-fi.com/sirzeeno" target="_blank">
     <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" />
   </a>
@@ -22,11 +23,12 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 | Per Server Messages     | Puts each server in its own message (Subject to rate limitation)            | ✅           |
 | Consolidation           | Consolidates All Servers into one message (limited to 25 in a single embed) | ✅           |
 | Pagination              | Flip through multiple servers in one paginated message                      | ✅           |
-| Custom Templates        | Use {{placeholders}} in your message template for Message customization     | ✅           |
+| Custom Templates        | Markdown style message embed system for customizable structure              | ✅           |
 | Button navigation       | Navigate Paginated messages using buttons                                   | ✅           |
 | Auto Updates            | Messages update automatically every X seconds                               | ✅           |
 | Player Count            | Show live player count from server (if supported)                           | ❌ (Planned) |
-| Server Joinable IP:Port | Show server joinable IP:Port                                                | ❌ (Planned) |
+| Server Joinable IP:Port | Show server joinable IP:Port                                                | ✅ |
+| Pelican Egg             | Installable Egg where you can run and configure the bot in the panel        | ❌ (Planned) |
 
 
 ## Setup in Pelican
@@ -50,7 +52,7 @@ Run the bot once or create the Secrets.json in the base directory you see when o
 
 ## Setup Outside Pelican
 > [!TIP]
-> You will need .NET 8.0 and curl installed.
+> You will need curl installed.
 
 ### Get The Latest Release
 
@@ -59,17 +61,10 @@ Download the latest release with this command. This command downloads the latest
 curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/Release.zip && unzip Release.zip && rm Release.zip
 ```
 
-### Do a Restore
-
-cd into the bot directory and run the restore command
-```
-cd Pelican Keeper/
-dotnet restore
-```
-
 ### Run the Bot
 > [!WARNING]
-> At this point you should create the Secrets.json in the bot directory, otherwise the first run will result in an error.
+> At this point you should create the Secrets.json in the directory the bot resides in, otherwise the first run will result in an error.<br>
+> If you don't create the Secrets.json, the bot will create a default one for you that you will need to fill out.<br>
 > After the first run, the bot will have created the Secrets.json. At that point it's your responsibility to fill out with all the necessary information.
 
 while still in the same directory to start the bot, you simply run this command
@@ -80,7 +75,6 @@ dotnet run --project "Pelican Keeper"
 ## Secrets
 
 > [!TIP]
-> The Secrets file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/Secrets.json).<br>
 > The Server and Client Tokens are API keys you generate from your Pelican panel.
 > The Admin page is where you can generate the server API token, and the client API token is under the Profile settings.
 

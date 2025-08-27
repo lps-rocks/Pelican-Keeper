@@ -6,5 +6,6 @@
     &lt;TestId&gt;NUnit3x::F9E53A39-DC4B-4DEB-8C0B-408A1904D62A::net9.0::Pelican_Keeper_Unit_Testing.RconTesting.SendCommandTest&lt;/TestId&gt;&#xD;
     &lt;TestId&gt;NUnit3x::F9E53A39-DC4B-4DEB-8C0B-408A1904D62A::net9.0::Pelican_Keeper_Unit_Testing.A2sTesting.SendCommandTest&lt;/TestId&gt;&#xD;
     &lt;TestId&gt;NUnit3x::F9E53A39-DC4B-4DEB-8C0B-408A1904D62A::net9.0::Pelican_Keeper_Unit_Testing.A2STesting.SendCommandTest&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;NUnit3x::F9E53A39-DC4B-4DEB-8C0B-408A1904D62A::net9.0::Pelican_Keeper_Unit_Testing.A2STesting.DummyTest&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

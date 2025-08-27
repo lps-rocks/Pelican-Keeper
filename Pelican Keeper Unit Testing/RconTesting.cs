@@ -23,7 +23,7 @@ public class RconTesting
             return;
         }
         
-        await PelicanInterface.SendGameServerCommandRcon(_secrets.ExternalIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
+        await PelicanInterface.SendGameServerCommandRcon(_secrets.ExternalServerIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
         
         if (ConsoleExt.ExceptionOccurred)
         {

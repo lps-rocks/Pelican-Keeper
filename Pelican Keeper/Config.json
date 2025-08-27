@@ -5,9 +5,8 @@
   "MessageSortingDirection": "Descending",
   "IgnoreOfflineServers": false,
   "ServersToIgnore": ["UUIDS HERE"],
-  "CommandExecutionMethod": "Rcon",
   
-  "JoinableIpDisplay": false,
+  "JoinableIpDisplay": true,
   "PlayerCountDisplay": false,
   
   "AutomaticShutdown": false,
@@ -15,15 +14,13 @@
   "AllowUserServerStartup": false,
   
   "ContinuesMarkdownRead": true,
+  "ContinuesServerToMonitorRead": true,
   "MarkdownUpdateInterval": 30,
   "ServerUpdateInterval": 10,
   
   "LimitServerCount": false,
   "MaxServerCount": 10,
   "ServersToDisplay": ["UUIDS HERE"],
-  
-  "EnableRcon": false,
-  "RconServersToMonitor": ["UUIDS HERE"],
   
   "Debug": false,
   "DryRun": false
