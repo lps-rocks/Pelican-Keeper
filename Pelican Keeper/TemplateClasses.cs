@@ -15,7 +15,7 @@ public abstract class TemplateClasses
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum MessageSorting
     {
-        Alphabetical,
+        Name,
         Status,
         Uptime,
         None
@@ -36,24 +36,6 @@ public abstract class TemplateClasses
         A2S
     }
     
-    // need to implement this in the future
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public enum OutputSortingDirection
-    {
-        Ascending,
-        Descending
-    }
-    
-    // need to implement this in the future
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public enum OutputSortingType
-    {
-        None,
-        Id,
-        Status,
-        Name
-    }
-    
     public class Secrets
     {
         public string? ClientToken { get; init; }
@@ -68,8 +50,8 @@ public abstract class TemplateClasses
     {
         public string? InternalIpStructure { get; init; }
         public MessageFormat? MessageFormat { get; init; }
-        public MessageSorting? MessageSorting { get; init; }
-        public MessageSortingDirection? MessageSortingDirection { get; init; }
+        public MessageSorting MessageSorting { get; init; }
+        public MessageSortingDirection MessageSortingDirection { get; init; }
         public bool IgnoreOfflineServers { get; init; }
         public string[]? ServersToIgnore { get; init; }
         
@@ -77,8 +59,10 @@ public abstract class TemplateClasses
         public bool PlayerCountDisplay { get; init; }
         
         public bool AutomaticShutdown { get; init; }
+        public string[]? ServersToAutoShutdown { get; init; }
         public string? EmptyServerTimeout { get; init; }
         public bool AllowUserServerStartup { get; init; }
+        public string[]? AllowServerStartup { get; init; }
         
         public bool ContinuesMarkdownRead { get; init; }
         public bool ContinuesServerToMonitorRead { get; init; }
@@ -93,8 +77,6 @@ public abstract class TemplateClasses
         public bool LimitServerCount { get; init; }
         public int MaxServerCount { get; init; }
         public string[]? ServersToDisplay { get; init; }
-        
-        public bool EnablePlayerMonitor { get; init; }
         
         public bool Debug { get; init; }
         public bool DryRun { get; init; }
@@ -152,7 +134,7 @@ public abstract class TemplateClasses
     
     public class ServersToMonitor
     {
-        public string Uuid { get; set; } = null!;
+        public string Uuid { get; set; }
         public CommandExecutionMethod Protocol { get; set; }
         public string? RconPortVariable { get; set; }
         public int? RconPort { get; set; }
@@ -161,5 +143,8 @@ public abstract class TemplateClasses
         public string? Command { get; set; }
         public string? QueryPortVariable { get; set; }
         public int? QueryPort { get; set; }
+        public string? MaxPlayerVariable { get; set; }
+        public int? MaxPlayer { get; set; }
+        public string? PlayerCountExtractRegex { get; set; }
     }
 }

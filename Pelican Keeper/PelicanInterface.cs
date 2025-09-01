@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using RestSharp;
 
 namespace Pelican_Keeper;
@@ -10,6 +11,7 @@ public static class PelicanInterface
 {
     private static List<ServersToMonitor>? _gameCommunicationJson;
     private static List<RconService> _rconServices = new();
+    private static Dictionary<string, DateTime> _shutdownTracker = new();
     
     /// <summary>
     /// Gets the server stats from the Pelican API
@@ -31,7 +33,7 @@ public static class PelicanInterface
         {
             if (!string.IsNullOrWhiteSpace(response.Content))
             {
-                var stats = ExtractServerResources(response.Content);
+                var stats = JsonHandler.ExtractServerResources(response.Content);
                 serverInfo.Resources = stats;
                 return;
             }
@@ -60,10 +62,67 @@ public static class PelicanInterface
         {
             if (!string.IsNullOrWhiteSpace(response.Content))
             {
-                var allocations = ExtractAllocations(response.Content);
+                var allocations = JsonHandler.ExtractAllocations(response.Content);
                 serverInfo.Allocations = allocations;
                 if (!Program.Config.PlayerCountDisplay) return;
-                MonitorServers(serverInfo, response.Content);
+                
+                bool isTracked = _shutdownTracker.Any(x => x.Key == serverInfo.Uuid);
+                if (serverInfo.Resources?.CurrentState.ToLower() != "offline" && serverInfo.Resources?.CurrentState.ToLower() != "stopping" && serverInfo.Resources?.CurrentState.ToLower() != "starting" && serverInfo.Resources?.CurrentState.ToLower() != "missing")
+                {
+                    if (!isTracked)
+                    {
+                        _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
+                        ConsoleExt.WriteLineWithPretext($"{serverInfo.Name} is tracked for shutdown: {isTracked}");
+                    }
+                    MonitorServers(serverInfo, response.Content);
+                    
+                    if (Program.Config.AutomaticShutdown)
+                    {
+                        if (serverInfo.PlayerCountText != "N/A" && !string.IsNullOrEmpty(serverInfo.PlayerCountText))
+                        {
+                            if (Program.Config.ServersToAutoShutdown != null && Program.Config.ServersToAutoShutdown[0] != "UUIDS HERE" && !Program.Config.ServersToAutoShutdown.Contains(serverInfo.Uuid))
+                            {
+                                if (Program.Config.Debug)
+                                    ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is not in the auto-shutdown list. Skipping shutdown check.");
+                                return;
+                            }
+                            
+                            if (_gameCommunicationJson == null || _gameCommunicationJson.Count == 0)
+                            {
+                                if (Program.Config.Debug)
+                                    ConsoleExt.WriteLineWithPretext("No game communication configuration found. Skipping shutdown check.", ConsoleExt.OutputType.Warning);
+                                return;
+                            }
+                            int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText, _gameCommunicationJson.First(s => s.Uuid == serverInfo.Uuid).PlayerCountExtractRegex);
+                            if (Program.Config.Debug)
+                                ConsoleExt.WriteLineWithPretext("Player count: " + playerCount + " for server: " + serverInfo.Name);
+                            if (playerCount > 0)
+                            {
+                                _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
+                            }
+                            else
+                            {
+                                TimeSpan.TryParse(Program.Config.EmptyServerTimeout, out var timeTillShutdown);
+                                if (timeTillShutdown == TimeSpan.Zero)
+                                    timeTillShutdown = TimeSpan.FromHours(1);
+                                if (DateTime.Now - _shutdownTracker[serverInfo.Uuid] >= timeTillShutdown)
+                                {
+                                    SendPowerCommand(serverInfo.Uuid, "stop");
+                                    ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} has been empty for over an hour. Sending shutdown command.");
+                                    _shutdownTracker.Remove(serverInfo.Uuid);
+                                    if (Program.Config.Debug)
+                                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is stopping and removed from shutdown tracker.");
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (isTracked)
+                {
+                    _shutdownTracker.Remove(serverInfo.Uuid);
+                    if (Program.Config.Debug)
+                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is offline or stopping. Removed from shutdown tracker.");
+                }
                 return;
             }
 
@@ -89,8 +148,8 @@ public static class PelicanInterface
         {
             if (response.Content != null)
             {
-                var servers = ExtractServerListInfo(response.Content);
-                GetServerStatsList(servers);
+                var servers = JsonHandler.ExtractServerListInfo(response.Content);
+                _ = GetServerStatsList(servers);
                 
                 if (Program.Config.ServersToIgnore != null && Program.Config.ServersToIgnore.Length > 0 && Program.Config.ServersToIgnore[0] != "UUIDS HERE")
                 {
@@ -99,7 +158,7 @@ public static class PelicanInterface
 
                 if (Program.Config.IgnoreOfflineServers)
                 {
-                    servers = servers.Where(s => s.Resources?.CurrentState.ToLower() == "online").ToList();
+                    servers = servers.Where(s => s.Resources?.CurrentState.ToLower() != "offline" && s.Resources?.CurrentState.ToLower() != "missing").ToList();
                 }
                 
                 if (Program.Config.LimitServerCount && Program.Config.MaxServerCount > 0)
@@ -113,7 +172,8 @@ public static class PelicanInterface
                         servers = servers.Take(Program.Config.MaxServerCount).ToList();
                     }
                 }
-                return servers;
+                
+                return SortServers(servers, Program.Config.MessageSorting, Program.Config.MessageSortingDirection);
             }
             ConsoleExt.WriteLineWithPretext("Empty Server List response content.", ConsoleExt.OutputType.Error);
         }
@@ -122,7 +182,7 @@ public static class PelicanInterface
             ConsoleExt.WriteLineWithPretext("JSON deserialization or fetching Error: " + ex.Message, ConsoleExt.OutputType.Error, ex);
             ConsoleExt.WriteLineWithPretext("JSON: " + response.Content);
         }
-        return new List<ServerInfo>();
+        return [];
     }
 
     /// <summary>
@@ -130,18 +190,45 @@ public static class PelicanInterface
     /// </summary>
     /// <param name="servers">List of Game Server Info</param>
     /// <returns>list of server stats responses</returns>
-    private static void GetServerStatsList(List<ServerInfo> servers)
+    private static async Task GetServerStatsList(List<ServerInfo> servers)
     {
-        foreach (var server in servers)
-        {
-            GetServerStats(server);
-            if (!Program.Config.JoinableIpDisplay) continue;
-            GetServerAllocations(server);
-        }
-    }
+        var sem = new SemaphoreSlim(5);
 
-    // This doesn't work for ARK, and most likely other games as well. I read it works for Minecraft, but I have to test it and other games.
-    private static string? SendGameServerCommand(string? uuid, string command)
+        // Stats tasks
+        var statsTasks = servers.Select(async server =>
+        {
+            await sem.WaitAsync();
+            try
+            {
+                if (Program.Config.Debug)
+                    ConsoleExt.WriteLineWithPretext("Fetched stats for server: " + server.Name);
+                GetServerStats(server);
+            }
+            finally { sem.Release(); }
+        });
+
+        // Allocations tasks
+        IEnumerable<Task> allocTasks = [];
+        if (Program.Config.JoinableIpDisplay)
+        {
+            allocTasks = servers.Select(async server =>
+            {
+                await sem.WaitAsync();
+                try
+                {
+                    if (Program.Config.Debug)
+                        ConsoleExt.WriteLineWithPretext("Fetched allocations for server: " + server.Name);
+                    GetServerAllocations(server);
+                }
+                finally { sem.Release(); }
+            });
+        }
+
+        // Run them all
+        await Task.WhenAll(statsTasks.Concat(allocTasks));
+    }
+    
+    private static string? SendGameServerCommand(string? uuid, string command) //TODO: I need to figure out a way to extract to the current player count and the maximum player count out of the return string where the max player count can be optional
     {
         if (string.IsNullOrWhiteSpace(uuid))
         {
@@ -222,12 +309,12 @@ public static class PelicanInterface
         return response;
     }
 
-    public static async Task<string?> SendA2SRequest(string ip, int port, string command) //Do I really need to store these in a list? Probably not, because I am not keeping the connection open because A2S is stateless.
+    public static async Task<string?> SendA2SRequest(string ip, int port)
     {
         A2SService a2S = new A2SService(ip, port);
         
         await a2S.Connect();
-        string response = await a2S.SendCommandAsync(command);
+        string response = await a2S.SendCommandAsync();
         
         return response;
     }
@@ -237,22 +324,31 @@ public static class PelicanInterface
         if (_gameCommunicationJson == null || _gameCommunicationJson.Count == 0) return;
         
         var serverToMonitor = _gameCommunicationJson.FirstOrDefault(s => s.Uuid == serverInfo.Uuid);
-        if (serverToMonitor == null) return;
-
+        if (serverToMonitor == null)
+        {
+            if (Program.Config.Debug)
+                ConsoleExt.WriteLineWithPretext("No monitoring configuration found for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
+            return;
+        }
+        
+        if (serverInfo.PlayerCountText != null)
+            serverInfo.PlayerCountText = PlayerCountCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, JsonHandler.ExtractMaxPlayerCount(json, serverToMonitor.MaxPlayerVariable).ToString());
         switch (serverToMonitor.Protocol)
         {
             case CommandExecutionMethod.A2S:
             {
-                int queryPort = ExtractQueryPort(json, serverToMonitor.QueryPortVariable);
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverToMonitor.QueryPortVariable);
+                ConsoleExt.WriteLineWithPretext("Query port for server " + serverInfo.Name + ": " + queryPort);
                 if (queryPort == 0)
                 {
                     ConsoleExt.WriteLineWithPretext("No Query port found for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
                     return;
                 }
 
-                if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null)
+                if (Program.Secrets.ExternalServerIp != null)
                 {
-                    var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort, serverToMonitor.Command).GetAwaiter().GetResult();
+                    ConsoleExt.WriteLineWithPretext("Sending A2S request to " + Program.Secrets.ExternalServerIp + ":" + queryPort + " for server " + serverInfo.Name);
+                    var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort).GetAwaiter().GetResult();
                     serverInfo.PlayerCountText = a2SResponse ?? "No response from A2S query.";
                 }
 
@@ -260,8 +356,8 @@ public static class PelicanInterface
             }
             case CommandExecutionMethod.Rcon:
             {
-                int rconPort = ExtractRconPort(json, serverToMonitor.RconPortVariable);
-                string rconPassword = ExtractRconPassword(json, serverToMonitor.RconPasswordVariable);
+                int rconPort = JsonHandler.ExtractRconPort(json, serverToMonitor.RconPortVariable);
+                string rconPassword = JsonHandler.ExtractRconPassword(json, serverToMonitor.RconPasswordVariable);
                 
                 if (rconPort == 0 || string.IsNullOrWhiteSpace(rconPassword))
                 {
@@ -288,173 +384,6 @@ public static class PelicanInterface
                 break;
             }
         }
-    }
-
-    private static int ExtractRconPort(string json, string? variableName)
-    {
-        if (variableName == null || variableName.Trim() == string.Empty)
-        {
-            variableName = "RCON_PORT";
-        }
-        
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        int rconPort = 0;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
-        {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out rconPort)){}
-        }
-
-        return rconPort;
-    }
-    
-    private static string ExtractRconPassword(string json, string? variableName)
-    {
-        if (variableName == null || variableName.Trim() == string.Empty)
-        {
-            variableName = "RCON_PASS";
-        }
-        
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        string rconPassword = string.Empty;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
-        {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName)
-            {
-                rconPassword = attr.GetProperty("server_value").GetString() ?? string.Empty;
-            }
-        }
-
-        return rconPassword;
-    }
-    
-    private static int ExtractQueryPort(string json, string? variableName)
-    {
-        if (variableName == null || variableName.Trim() == string.Empty)
-        {
-            variableName = "QUERY_PORT";
-        }
-        
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        
-        int queryPort = 0;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
-        {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out queryPort)){}
-        }
-
-        return queryPort;
-    }
-
-    private static List<ServerAllocation> ExtractAllocations(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        // Extract allocations
-        var allocations = new List<ServerAllocation>();
-        var allocationsArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("allocations")
-            .GetProperty("data");
-
-        foreach (var alloc in allocationsArray.EnumerateArray())
-        {
-            var attr = alloc.GetProperty("attributes");
-            var ip = attr.GetProperty("ip").GetString() ?? string.Empty;
-            var port = attr.GetProperty("port").GetInt32();
-            var isDefault = attr.GetProperty("is_default").GetBoolean();
-
-            allocations.Add(new ServerAllocation {
-                Ip = ip,
-                Port = port,
-                IsDefault = isDefault
-            });
-        }
-
-        return allocations;
-    }
-    
-    private static List<ServerInfo> ExtractServerListInfo(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var serverInfo = new List<ServerInfo>();
-        var serversArray = root
-            .GetProperty("data")
-            .EnumerateArray();
-        foreach (var server in serversArray)
-        {
-            // Extract id, uuid, and name
-            var id = server.GetProperty("attributes").GetProperty("id").GetInt32();
-            var uuid = server.GetProperty("attributes").GetProperty("uuid").GetString() ?? string.Empty;
-            var name = server.GetProperty("attributes").GetProperty("name").GetString() ?? string.Empty;
-            
-            serverInfo.Add(new ServerInfo {
-                Id = id,
-                Uuid = uuid,
-                Name = name
-            });
-        }
-
-        return serverInfo;
-    }
-    
-    private static ServerResources ExtractServerResources(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        
-        var attributes = root.GetProperty("attributes");
-        var resources = attributes.GetProperty("resources");
-        
-        var currentState = attributes.GetProperty("current_state").GetString() ?? string.Empty;
-        
-        var memory = resources.GetProperty("memory_bytes").GetInt64();
-        var cpu = resources.GetProperty("cpu_absolute").GetDouble();
-        var disk = resources.GetProperty("disk_bytes").GetInt64();
-        var networkRx = resources.GetProperty("network_rx_bytes").GetInt64();
-        var networkTx = resources.GetProperty("network_tx_bytes").GetInt64();
-        var uptime = resources.GetProperty("uptime").GetInt64();
-            
-        var resourcesInfo = new ServerResources {
-            CurrentState = currentState,
-            MemoryBytes = memory,
-            CpuAbsolute = cpu,
-            DiskBytes = disk,
-            NetworkRxBytes = networkRx,
-            NetworkTxBytes = networkTx,
-            Uptime = uptime
-        };
-
-        return resourcesInfo;
     }
     
     public static void GetServersToMonitorFileAsync()

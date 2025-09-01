@@ -4,6 +4,8 @@ using RestSharp;
 
 namespace Pelican_Keeper;
 
+using static TemplateClasses;
+
 public static class HelperClass
 {
     private static readonly Dictionary<string, string> LastEmbedHashes = new();
@@ -41,14 +43,14 @@ public static class HelperClass
         return true;
     }
 
-    private static TemplateClasses.ServerAllocation? GetConnectableAllocation(TemplateClasses.ServerInfo serverInfo) //TODO: I need more logic here to determine the best allocation to use and to determine the right port if the main port is not he joining port
+    private static ServerAllocation? GetConnectableAllocation(ServerInfo serverInfo) //TODO: I need more logic here to determine the best allocation to use and to determine the right port if the main port is not he joining port, for example in ark se its the query port
     {
         if (serverInfo.Allocations == null || serverInfo.Allocations.Count == 0)
             ConsoleExt.WriteLineWithPretext("Empty allocations for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
         return serverInfo.Allocations?.FirstOrDefault(allocation => allocation.IsDefault) ?? serverInfo.Allocations?.FirstOrDefault();
     }
     
-    public static string GetConnectableAddress(TemplateClasses.ServerInfo serverInfo)
+    public static string GetConnectableAddress(ServerInfo serverInfo)
     {
         var allocation = GetConnectableAllocation(serverInfo);
         if (allocation == null)
@@ -68,5 +70,75 @@ public static class HelperClass
         return $"{Program.Secrets.ExternalServerIp}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
     }
     
-    
+    public static List<ServerInfo> SortServers(IEnumerable<ServerInfo> servers, MessageSorting field, MessageSortingDirection direction)
+    {
+        return (field, direction) switch
+        {
+            (MessageSorting.Name, MessageSortingDirection.Ascending) => servers.OrderBy(s => s.Name).ToList(),
+            (MessageSorting.Name, MessageSortingDirection.Descending) => servers.OrderByDescending(s => s.Name).ToList(),
+            (MessageSorting.Status, MessageSortingDirection.Ascending) => servers.OrderBy(s => s.Resources?.CurrentState).ToList(),
+            (MessageSorting.Status, MessageSortingDirection.Descending) => servers.OrderByDescending(s => s.Resources?.CurrentState).ToList(),
+            (MessageSorting.Uptime, MessageSortingDirection.Ascending) => servers.OrderBy(s => s.Resources?.Uptime).ToList(),
+            (MessageSorting.Uptime, MessageSortingDirection.Descending) => servers.OrderByDescending(s => s.Resources?.Uptime).ToList(),
+            _ => servers.ToList()
+        };
+    }
+
+    public static int ExtractPlayerCount(string serverResponse, string? regexPattern)
+    {
+        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo Player\b");
+        if (noPlayer.Success) return 0;
+        
+        var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
+        if (playerMaxPlayer.Success && int.TryParse(playerMaxPlayer.Groups[1].Value, out var playerCount))
+        {
+            return playerCount;
+        }
+        
+        var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
+        if (arkRconPlayerList.Success)
+        {
+            var index = arkRconPlayerList.Groups[1].Value;     // player list index starting from 0
+            //var playerName = arkRconPlayerList.Groups[2].Value; // "FinalPlayer"
+            //var playerId = arkRconPlayerList.Groups[3].Value;   // "FinalId"
+            return int.Parse(index) + 1;
+        }
+        return 0;
+    }
+
+    public static string PlayerCountCleanup(string serverResponse, string? regexPattern, string? maxPlayers = "Unknown")
+    {
+        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo Player\b");
+        if (noPlayer.Success) return $"0/{maxPlayers}";
+        
+        var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
+        if (playerMaxPlayer.Success)
+        {
+            return playerMaxPlayer.Value;
+        }
+
+        if (regexPattern == @"(\d+)\.\s*([^,]+),\s*(.+)$")
+        {
+            
+        }
+        var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
+        if (arkRconPlayerList.Success)
+        {
+            var index = arkRconPlayerList.Groups[1].Value;     // player list index starting from 0
+            //var playerName = arkRconPlayerList.Groups[2].Value; // "FinalPlayer"
+            //var playerId = arkRconPlayerList.Groups[3].Value;   // "FinalId"
+            return $"{int.Parse(index) + 1}/{maxPlayers}"; // Max players is unknown in this case
+        }
+        
+        // Custom User-defined regex pattern
+        if (regexPattern != null)
+        {
+            var customMatch = Regex.Match(serverResponse, regexPattern);
+            if (customMatch.Success)
+            {
+                return $"{customMatch}/{maxPlayers}";
+            }
+        }
+        return serverResponse;
+    }
 }

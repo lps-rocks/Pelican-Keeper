@@ -1,17 +1,19 @@
 ﻿{
   "InternalIpStructure": "192.168.*.*",
   "MessageFormat": "Consolidated",
-  "MessageSorting": "None",
-  "MessageSortingDirection": "Descending",
+  "MessageSorting": "Name",
+  "MessageSortingDirection": "Ascending",
   "IgnoreOfflineServers": false,
   "ServersToIgnore": ["UUIDS HERE"],
   
   "JoinableIpDisplay": true,
-  "PlayerCountDisplay": false,
+  "PlayerCountDisplay": true,
   
-  "AutomaticShutdown": false,
-  "EmptyServerTimeout": "00:00",
-  "AllowUserServerStartup": false,
+  "AutomaticShutdown": true,
+  "ServersToAutoShutdown": ["UUIDS HERE"],
+  "EmptyServerTimeout": "00:01:00",
+  "AllowUserServerStartup": true,
+  "AllowServerStartup": ["UUIDS HERE"],
   
   "ContinuesMarkdownRead": true,
   "ContinuesServerToMonitorRead": true,
@@ -22,6 +24,6 @@
   "MaxServerCount": 10,
   "ServersToDisplay": ["UUIDS HERE"],
   
-  "Debug": false,
+  "Debug": true,
   "DryRun": false
 }

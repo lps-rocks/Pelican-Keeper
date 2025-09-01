@@ -9,7 +9,7 @@ public class A2SService(string ip, int port) : ISendCommand
     private UdpClient? _udpClient;
     private IPEndPoint? _endPoint;
 
-    public Task Connect()
+    public Task Connect() //TODO: Add Offline Server Handling
     {
         _udpClient = new UdpClient();
         _endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
@@ -19,7 +19,7 @@ public class A2SService(string ip, int port) : ISendCommand
         return Task.CompletedTask;
     }
     
-    public async Task<string> SendCommandAsync(string command)
+    public async Task<string> SendCommandAsync(string? command = null)
     {
         byte[] request = BuildA2SInfoPacket();
         
@@ -105,7 +105,7 @@ public class A2SService(string ip, int port) : ISendCommand
             ConsoleExt.WriteLineWithPretext("Bots: " + bots);
         }
 
-        return players.ToString();
+        return $"{players}/{maxPlayers}";
     }
     
     public void Dispose()

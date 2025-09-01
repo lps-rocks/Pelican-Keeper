@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -19,6 +18,7 @@ internal static class Program
     internal static Config Config = null!;
     private static readonly EmbedBuilderService EmbedService = new();
     private static List<DiscordEmbed> _pages = null!;
+    private static List<ServerInfo> _serverInfo = null!;
 
     private enum EmbedUpdateMode
     {
@@ -51,7 +51,8 @@ internal static class Program
 
         discord.Ready += OnClientReady;
         discord.MessageDeleted += OnMessageDeleted;
-        discord.ComponentInteractionCreated += OnComponentInteractionCreated;
+        discord.ComponentInteractionCreated += OnPageFlipInteraction;
+        discord.ComponentInteractionCreated += OnServerStartInteraction;
         
         await discord.ConnectAsync();
         await Task.Delay(-1);
@@ -64,7 +65,7 @@ internal static class Program
     /// <param name="sender">DiscordClient</param>
     /// <param name="e">ComponentInteractionCreateEventArgs</param>
     /// <returns>Task of Type Task</returns>
-    private static async Task<Task> OnComponentInteractionCreated(DiscordClient sender, ComponentInteractionCreateEventArgs e)
+    private static async Task<Task> OnPageFlipInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (LiveMessageStorage.GetPaginated(e.Message.Id) is not { } pagedTracked || e.User.IsBot)
         {
@@ -99,13 +100,28 @@ internal static class Program
 
         try
         {
+            // treat "UUIDS HERE" placeholder or empty/null list as "allow all"
+            bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+            WriteLineWithPretext(Config.AllowServerStartup[0]);
+            WriteLineWithPretext("show all: " + allowAll);
+
+            // allow only if user-startup enabled, not ignoring offline, and either allow-all or in allow-list
+            bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(_serverInfo[index].Uuid, StringComparer.OrdinalIgnoreCase));
+            WriteLineWithPretext("show start: " + showStart);
+
+            var components = new List<DiscordComponent>
+            {
+                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous")
+            };
+            if (showStart)
+            {
+                components.Add(new DiscordButtonComponent(ButtonStyle.Primary, _serverInfo[index].Uuid, "Start"));
+            }
+            components.Add(new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️"));
             await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
                 new DiscordInteractionResponseBuilder()
                     .AddEmbed(_pages[index])
-                    .AddComponents(
-                        new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-                        new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-                    )
+                    .AddComponents(components)
             );
         }
         catch (NotFoundException nf)
@@ -124,6 +140,37 @@ internal static class Program
                 WriteLineWithPretext("Unexpected error during component interaction: " + ex.Message, OutputType.Error);
         }
 
+        return Task.CompletedTask;
+    }
+    
+    private static async Task<Task> OnServerStartInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
+    {
+        if (e.User.IsBot)
+        {
+            if (Config.Debug)
+                WriteLineWithPretext("User is a Bot!", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+
+        if (Config.Debug)
+            WriteLineWithPretext("User " + e.User.Username + " clicked button with ID: " + e.Id);
+        
+        var id = e.Id;
+        var server = _serverInfo.FirstOrDefault(s => s.Uuid == id);
+        if (server == null)
+        {
+            if (Config.Debug)
+                WriteLineWithPretext($"No server found with UUID {id}", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+
+        if (server.Resources?.CurrentState.ToLower() == "offline")
+        {
+            SendPowerCommand(server.Uuid, "start");
+            if (Config.Debug)
+                WriteLineWithPretext("Start command sent to server " + server.Name);
+            await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        }
         return Task.CompletedTask;
     }
 
@@ -193,6 +240,7 @@ internal static class Program
                 async () =>
                 {
                     var serversList = GetServersList();
+                    _serverInfo = serversList;
                     if (serversList.Count == 0)
                     {
                         WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
@@ -213,7 +261,38 @@ internal static class Program
                         {
                             if (Config.Debug)
                                 WriteLineWithPretext($"Updating message {tracked}");
-                            await msg.ModifyAsync(embed);
+                            
+                            if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
+                            {
+                                int index = 1;
+                                List<string?> selectedServerUuids;
+                                
+                                if (Config.AllowServerStartup is { Length: > 0 } && Config.AllowServerStartup[0] != "UUIDS HERE")
+                                {
+                                    selectedServerUuids = uuids.Where(uuid => Config.AllowServerStartup.Contains(uuid)).ToList();
+                                }
+                                else
+                                {
+                                    selectedServerUuids = uuids;
+                                }
+                                
+                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, serverUuids, $"{index++}: Start")).Cast<DiscordComponent>().ToList();
+
+                                WriteLineWithPretext("Buttons created: " + buttons.Count);
+                                await msg.ModifyAsync(mb =>
+                                {
+                                    mb.WithEmbed(embed);
+                                    mb.AddRows(buttons);
+                                });
+                            }
+                            else
+                            {
+                                await msg.ModifyAsync(mb =>
+                                {
+                                    mb.WithEmbed(embed);
+                                    mb.ClearComponents();
+                                });
+                            }
                         }
                         else if (Config.Debug)
                             WriteLineWithPretext("Message has not changed. Skipping.");
@@ -222,8 +301,24 @@ internal static class Program
                     {
                         if (!Config.DryRun)
                         {
-                            var msg = await channel.SendMessageAsync(embed);
-                            LiveMessageStorage.Save(msg.Id);
+                            if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
+                            {
+                                int index = 1;
+                                List<DiscordComponent> buttons = uuids.Select(uuid => new DiscordButtonComponent(ButtonStyle.Primary, uuid, $"{index++}: Start")).Cast<DiscordComponent>().ToList();
+
+                                WriteLineWithPretext("Buttons created: " + buttons.Count);
+                                var msg = await channel.SendMessageAsync(mb =>
+                                {
+                                    mb.WithEmbed(embed);
+                                    mb.AddRows(buttons);
+                                });
+                                LiveMessageStorage.Save(msg.Id);
+                            }
+                            else
+                            {
+                                var msg = await channel.SendMessageAsync(embed);
+                                LiveMessageStorage.Save(msg.Id);
+                            }
                         }
                     }
                 },
@@ -239,6 +334,7 @@ internal static class Program
                 async () =>
                 {
                     var serversList = GetServersList();
+                    _serverInfo = serversList;
                     if (serversList.Count == 0)
                     {
                         WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
@@ -279,9 +375,23 @@ internal static class Program
                         {
                             if (!Config.DryRun)
                             {
-                                var msg = await SendPaginatedMessageAsync(channel, embeds);
-
-                                LiveMessageStorage.Save(msg.Id, 0);
+                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                
+                                WriteLineWithPretext("show all: " + allowAll);
+                                WriteLineWithPretext("show start: " + showStart);
+                                
+                                if (showStart)
+                                {
+                                    string? uuid = uuids[0];
+                                    var msg = await channel.SendPaginatedMessageAsync(embeds, uuid);
+                                    LiveMessageStorage.Save(msg.Id, 0);
+                                }
+                                else
+                                {
+                                    var msg = await channel.SendPaginatedMessageAsync(embeds);
+                                    LiveMessageStorage.Save(msg.Id, 0);
+                                }
                             }
                         }
                     }
@@ -294,6 +404,7 @@ internal static class Program
         if (Config.MessageFormat == MessageFormat.PerServer)
         {
             var serversList = GetServersList();
+            _serverInfo = serversList;
             if (serversList.Count == 0)
             {
                 WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
@@ -322,7 +433,26 @@ internal static class Program
                             {
                                 if (Config.Debug)
                                     WriteLineWithPretext($"Updating message {tracked}");
-                                await msg.ModifyAsync(embed);
+                                
+                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+
+                                if (showStart)
+                                {
+                                    await msg.ModifyAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
+                                    });
+                                }
+                                else
+                                {
+                                    await msg.ModifyAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.ClearComponents();
+                                    });
+                                }
                             }
                             else if (Config.Debug)
                             {
@@ -331,10 +461,25 @@ internal static class Program
                         }
                         else
                         {
-                            if (Config.DryRun)
+                            if (!Config.DryRun)
                             {
-                                var msg = await channel.SendMessageAsync(embed);
-                                LiveMessageStorage.Save(msg.Id);
+                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                
+                                if (showStart)
+                                {
+                                    var msg = await channel.SendMessageAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
+                                    });
+                                    LiveMessageStorage.Save(msg.Id);
+                                }
+                                else
+                                {
+                                    var msg = await channel.SendMessageAsync(embed);
+                                    LiveMessageStorage.Save(msg.Id);
+                                }
                             }
                         }
                     },
@@ -372,7 +517,12 @@ internal static class Program
             }
         });
     }
-
+    
+    private static void AddRows(this DiscordMessageBuilder mb, IEnumerable<DiscordComponent> components)
+    {
+        foreach (var row in components.Chunk(5))
+            mb.AddComponents(row);
+    }
 
     /// <summary>
     /// Sends a paginated message
@@ -380,13 +530,26 @@ internal static class Program
     /// <param name="channel">Target channel</param>
     /// <param name="embeds">List of embeds to paginate</param>
     /// <returns>The discord message</returns>
-    private static async Task<DiscordMessage> SendPaginatedMessageAsync(DiscordChannel channel, List<DiscordEmbed> embeds)
+    private static async Task<DiscordMessage> SendPaginatedMessageAsync(this DiscordChannel channel, List<DiscordEmbed> embeds, string? uuid = null)
     {
-        var buttons = new DiscordComponent[]
+        DiscordComponent[] buttons;
+        if (uuid != null)
         {
-            new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-            new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-        };
+            buttons =
+            [
+                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
+                new DiscordButtonComponent(ButtonStyle.Primary, uuid, "Start"),
+                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
+            ];
+        }
+        else
+        {
+            buttons =
+            [
+                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
+                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
+            ];
+        }
 
         var messageBuilder = new DiscordMessageBuilder()
             .WithEmbed(embeds[0])

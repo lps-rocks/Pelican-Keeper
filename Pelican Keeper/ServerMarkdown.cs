@@ -66,7 +66,6 @@ public static class ServerMarkdown
         
         var viewModel = new TemplateClasses.ServerViewModel
         {
-            //PlayerCount = 
             Uuid = serverResponse.Uuid,
             ServerName = serverResponse.Name,
             Status = serverResponse.Resources.CurrentState,
@@ -82,6 +81,11 @@ public static class ServerMarkdown
         if (Program.Config.JoinableIpDisplay)
         {
             viewModel.IpAndPort = HelperClass.GetConnectableAddress(serverResponse);
+        }
+        
+        if (Program.Config.PlayerCountDisplay)
+        {
+            viewModel.PlayerCount = serverResponse.PlayerCountText ?? "N/A";
         }
 
         var result = PreprocessTemplateTags(viewModel);

@@ -127,8 +127,7 @@ public static class FileManager
         }
         catch (Exception ex)
         {
-            WriteLineWithPretext(
-                "Failed to load ServersToMonitor.json. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
+            WriteLineWithPretext("Failed to load ServersToMonitor.json. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
             return null;
         }
     }

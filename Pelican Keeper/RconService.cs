@@ -12,7 +12,7 @@ public class RconService(string ip, int port, string password) : ISendCommand
     public readonly string Ip = ip;
     public readonly int Port = port;
     
-    public async Task Connect()
+    public async Task Connect() //TODO: Add Offline Server Handling
     {
         _tcpClient = new TcpClient();
         await _tcpClient.ConnectAsync(Ip, Port);
@@ -43,8 +43,8 @@ public class RconService(string ip, int port, string password) : ISendCommand
 
         var response = await ReadResponseAsync();
         if (Program.Config.Debug)
-            ConsoleExt.WriteLineWithPretext($"RCON command response: {response.body}");
-        return response.body;
+            ConsoleExt.WriteLineWithPretext($"RCON command response: {response.body.Trim()}");
+        return response.body.Trim();
     }
 
     public void Dispose()
@@ -89,7 +89,7 @@ public class RconService(string ip, int port, string password) : ISendCommand
         while (offset < length)
         {
             int read = await _stream!.ReadAsync(buffer, offset, length - offset);
-            if (read == 0) throw new IOException("Connection closed by remote host");
+            if (read == 0) ConsoleExt.WriteLineWithPretext("Connection closed unexpectedly.", ConsoleExt.OutputType.Error, new IOException("Connection closed by remote host"));
             offset += read;
         }
         return buffer;

@@ -2,6 +2,14 @@
   {
     "Uuid": "8c9af8c4-08a4-4149-a129-474f94019caa",
     "Protocol": "A2S",
-    "QueryPort": "QUERY_PORT"
+    "QueryPortVariable": "QUERY_PORT"
+  },
+  {
+    "Uuid": "2287b0f5-afb5-4c7e-9054-630a58a8c51c",
+    "Protocol": "RCON",
+    "RconPortVariable": "RCON_PORT",
+    "RconPasswordVariable": "ARK_ADMIN_PASSWORD",
+    "MaxPlayersVariable": "MAX_PLAYERS",
+    "Command": "ListPlayers"
   }
 ]

@@ -2,6 +2,7 @@
 
 {{IpAndPort}}
 {{StatusIcon}} **Status:** {{Status}}
+**Players:** {{PlayerCount}}
 🖥️ **CPU:** {{Cpu}}
 🧠 **Memory:** {{Memory}}
 💽 **Disk:** {{Disk}}

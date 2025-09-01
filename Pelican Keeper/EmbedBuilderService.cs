@@ -143,6 +143,7 @@ public static class EmbedBuilderHelper
         return status.ToLower() switch
         {
             "offline" => "🔴",
+            "missing" => "🟡",
             "running" => "🟢",
             _ => "⚪"
         };
