@@ -94,7 +94,7 @@ dotnet run --project "Pelican Keeper"
   "ServerToken": "YOUR_SERVER_TOEKN",
   "ServerUrl": "YOUR_BASIC_SERVER_URL",
   "BotToken": "YOUR_DISCORD_BOT_TOKEN",
-  "ChannelId": "THE_CHANNELID_YOU_WANT_THE_BOT_TO_POST_IN",
+  "ChannelId": THE_CHANNELID_YOU_WANT_THE_BOT_TO_POST_IN,
   "ExternalServerIP": "YOUR_EXTERNAL_SERVER_IP"
 }
 ```
