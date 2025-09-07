@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <IsPublishable>false</IsPublishable>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <RootNamespace>Pelican_Keeper_Unit_Testing</RootNamespace>
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
