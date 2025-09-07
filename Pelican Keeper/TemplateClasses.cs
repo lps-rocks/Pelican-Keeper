@@ -31,7 +31,7 @@ public abstract class TemplateClasses
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum CommandExecutionMethod
     {
-        PelicanApi,
+        PelicanApi, //Thinking about adding the minecraft protocol as well
         Rcon,
         A2S
     }
@@ -49,7 +49,7 @@ public abstract class TemplateClasses
     public class Config
     {
         public string? InternalIpStructure { get; init; }
-        public MessageFormat? MessageFormat { get; init; }
+        public MessageFormat MessageFormat { get; init; }
         public MessageSorting MessageSorting { get; init; }
         public MessageSortingDirection MessageSortingDirection { get; init; }
         public bool IgnoreOfflineServers { get; init; }
@@ -57,6 +57,7 @@ public abstract class TemplateClasses
         
         public bool JoinableIpDisplay { get; init; }
         public bool PlayerCountDisplay { get; init; }
+        public string[]? ServersToMonitor { get; init; }
         
         public bool AutomaticShutdown { get; init; }
         public string[]? ServersToAutoShutdown { get; init; }
@@ -65,7 +66,7 @@ public abstract class TemplateClasses
         public string[]? AllowServerStartup { get; init; }
         
         public bool ContinuesMarkdownRead { get; init; }
-        public bool ContinuesServerToMonitorRead { get; init; }
+        public bool ContinuesGamesToMonitorRead { get; init; }
         public int MarkdownUpdateInterval { get; init; }
         private readonly int _serverUpdateInterval;
         public int ServerUpdateInterval
@@ -87,6 +88,7 @@ public abstract class TemplateClasses
         public int Id { get; init; }
         public string Uuid { get; init; } = null!;
         public string Name { get; init; } = null!;
+        public EggInfo Egg { get; init; } = null!;
         public ServerResources? Resources { get; set; }
         public List<ServerAllocation>? Allocations { get; set; }
         public string? PlayerCountText { get; set; }
@@ -105,6 +107,7 @@ public abstract class TemplateClasses
     
     public class ServerAllocation
     {
+        public string Uuid { get; init; } = null!;
         public string Ip { get; init; } = null!;
         public int Port { get; init; }
         public bool IsDefault { get; init; }
@@ -132,19 +135,22 @@ public abstract class TemplateClasses
         public string Uptime { get; set; } = null!;
     }
     
-    public class ServersToMonitor
+    public class GamesToMonitor
     {
-        public string Uuid { get; set; }
-        public CommandExecutionMethod Protocol { get; set; }
+        public string Game { get; init; } = null!;
+        public CommandExecutionMethod Protocol { get; init; }
         public string? RconPortVariable { get; set; }
-        public int? RconPort { get; set; }
         public string? RconPasswordVariable { get; set; }
         public string? RconPassword { get; set; }
         public string? Command { get; set; }
         public string? QueryPortVariable { get; set; }
-        public int? QueryPort { get; set; }
         public string? MaxPlayerVariable { get; set; }
-        public int? MaxPlayer { get; set; }
         public string? PlayerCountExtractRegex { get; set; }
+    }
+    
+    public class EggInfo
+    {
+        public int Id { get; init; }
+        public string Name { get; set; } = null!;
     }
 }

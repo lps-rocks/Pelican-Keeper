@@ -11,13 +11,13 @@ public class A2STesting
     public async Task Setup()
     {
         _secrets = await FileManager.ReadSecretsFile();
-        _config = await FileManager.ReadConfigFile();
+        _config = TestConfigCreator.CreateDefaultConfigInstance();
     }
 
     [Test]
     public async Task SendCommandTest()
     {
-        if (_secrets == null || _config == null) //its failing at reading the enum from the config file
+        if (_secrets == null || _config == null)
         {
             Assert.Fail("Secrets or Config not loaded properly.");
             return;
@@ -27,7 +27,7 @@ public class A2STesting
 
         if (_secrets.ExternalServerIp != null)
         {
-            await PelicanInterface.SendA2SRequest(_secrets.ExternalServerIp, 27051); // should load these from the secrets file and the information provided by the pelican API
+            await PelicanInterface.SendA2SRequest(_secrets.ExternalServerIp, 27051);
         }
         
         if (ConsoleExt.ExceptionOccurred)

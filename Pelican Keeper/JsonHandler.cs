@@ -1,13 +1,55 @@
 ﻿using System.Text.Json;
-
+using System.Text.RegularExpressions;
 using static Pelican_Keeper.TemplateClasses;
 
 namespace Pelican_Keeper;
 
 public class JsonHandler
 {
-    internal static int ExtractRconPort(string json, string? variableName)
+    internal static List<EggInfo> ExtractEggInfo(string json)
     {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        
+        List<EggInfo> eggs = new List<EggInfo>();
+        var eggArray = root
+            .GetProperty("data")
+            .EnumerateArray();
+        
+        foreach (var egg in eggArray)
+        {
+            var attr = egg.GetProperty("attributes");
+            string name = attr.GetProperty("name").GetString() ?? string.Empty;
+            int id = attr.GetProperty("id").GetInt32();
+
+            eggs.Add(new EggInfo
+            {
+                Id = id,
+                Name = name
+            });
+        }
+
+        return eggs;
+    }
+    
+    internal static int ExtractRconPort(string json, string uuid, string? variableName)
+    {
+        if (variableName != null)
+        {
+            var match = Regex.Match(variableName, @"SERVER_PORT\s*\+\s*(\d+)");
+            if (match.Success)
+            {
+                int addition = Convert.ToInt32(match.Groups[1].Value);
+
+                var allocations = ExtractNetworkAllocations(json, uuid);
+                return allocations.Find(x => x.IsDefault)!.Port + addition;
+            }
+        }
+        if (variableName is "SERVER_PORT")
+        {
+            var allocations = ExtractNetworkAllocations(json, uuid);
+            return allocations.Find(x => x.IsDefault)!.Port;
+        }
         if (variableName == null || variableName.Trim() == string.Empty)
         {
             variableName = "RCON_PORT";
@@ -17,22 +59,28 @@ public class JsonHandler
         var root = doc.RootElement;
 
         int rconPort = 0;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
+        var serversArray = root.GetProperty("data").EnumerateArray();
+        foreach (var data in serversArray)
         {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out rconPort)){}
+            var serverUuid = data.GetProperty("attributes").GetProperty("uuid").ToString();
+            if (serverUuid != uuid) continue;
+            var variablesArray = data
+                .GetProperty("attributes")
+                .GetProperty("relationships")
+                .GetProperty("variables")
+                .GetProperty("data");
+        
+            foreach (var alloc in variablesArray.EnumerateArray())
+            {
+                var attr = alloc.GetProperty("attributes");
+                if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out rconPort)){}
+            }
         }
 
         return rconPort;
     }
     
-    internal static string ExtractRconPassword(string json, string? variableName)
+    internal static string ExtractRconPassword(string json, string uuid, string? variableName)
     {
         if (variableName == null || variableName.Trim() == string.Empty)
         {
@@ -43,26 +91,48 @@ public class JsonHandler
         var root = doc.RootElement;
 
         string rconPassword = string.Empty;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
+        var serversArray = root.GetProperty("data").EnumerateArray();
+        foreach (var data in serversArray)
         {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName)
+            var serverUuid = data.GetProperty("attributes").GetProperty("uuid").ToString();
+            if (serverUuid != uuid) continue;
+            var variablesArray = data
+                .GetProperty("attributes")
+                .GetProperty("relationships")
+                .GetProperty("variables")
+                .GetProperty("data");
+        
+            foreach (var alloc in variablesArray.EnumerateArray())
             {
-                rconPassword = attr.GetProperty("server_value").GetString() ?? string.Empty;
+                var attr = alloc.GetProperty("attributes");
+                if (attr.GetProperty("env_variable").GetString() == variableName)
+                {
+                    rconPassword = attr.GetProperty("server_value").GetString() ?? string.Empty;
+                }
             }
         }
 
         return rconPassword;
     }
     
-    internal static int ExtractQueryPort(string json, string? variableName)
+    internal static int ExtractQueryPort(string json, string uuid, string? variableName)
     {
+        if (variableName != null)
+        {
+            var match = Regex.Match(variableName, @"SERVER_PORT\s*\+\s*(\d+)");
+            if (match.Success)
+            {
+                int addition = Convert.ToInt32(match.Groups[1].Value);
+
+                var allocations = ExtractNetworkAllocations(json, uuid);
+                return allocations.Find(x => x.IsDefault)!.Port + addition;
+            }
+        }
+        if (variableName is "SERVER_PORT")
+        {
+            var allocations = ExtractNetworkAllocations(json, uuid);
+            return allocations.Find(x => x.IsDefault)!.Port;
+        }
         if (variableName == null || variableName.Trim() == string.Empty)
         {
             variableName = "QUERY_PORT";
@@ -72,22 +142,28 @@ public class JsonHandler
         var root = doc.RootElement;
         
         int queryPort = 0;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("variables")
-            .GetProperty("data");
-        
-        foreach (var alloc in variablesArray.EnumerateArray())
+        var serversArray = root.GetProperty("data").EnumerateArray();
+        foreach (var data in serversArray)
         {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out queryPort)){}
+            var serverUuid = data.GetProperty("attributes").GetProperty("uuid").ToString();
+            if (serverUuid != uuid) continue;
+            var variablesArray = data
+                .GetProperty("attributes")
+                .GetProperty("relationships")
+                .GetProperty("variables")
+                .GetProperty("data");
+        
+            foreach (var alloc in variablesArray.EnumerateArray())
+            {
+                var attr = alloc.GetProperty("attributes");
+                if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out queryPort)){}
+            }
         }
 
         return queryPort;
     }
     
-    public static int ExtractMaxPlayerCount(string json, string? variableName)
+    public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName)
     {
         if (variableName == null || variableName.Trim() == string.Empty)
         {
@@ -98,48 +174,62 @@ public class JsonHandler
         var root = doc.RootElement;
 
         int maxPlayers = 0;
-        var variablesArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("allocations")
-            .GetProperty("data");
-
-        foreach (var alloc in variablesArray.EnumerateArray())
+        var serversArray = root.GetProperty("data").EnumerateArray();
+        foreach (var data in serversArray)
         {
-            var attr = alloc.GetProperty("attributes");
-            if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out maxPlayers)){}
+            var serverUuid = data.GetProperty("attributes").GetProperty("uuid").ToString();
+            if (serverUuid != uuid) continue;
+            var variablesArray = data
+                .GetProperty("attributes")
+                .GetProperty("relationships")
+                .GetProperty("variables")
+                .GetProperty("data");
+        
+            foreach (var alloc in variablesArray.EnumerateArray())
+            {
+                var attr = alloc.GetProperty("attributes");
+                if (attr.GetProperty("env_variable").GetString() == variableName && int.TryParse(attr.GetProperty("server_value").GetString(), out maxPlayers)){}
+            }
         }
-
+        
         return maxPlayers;
     }
 
-    internal static List<ServerAllocation> ExtractAllocations(string json)
+    internal static List<ServerAllocation> ExtractNetworkAllocations(string json, string? serverUuid = null)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
         // Extract allocations
         var allocations = new List<ServerAllocation>();
-        var allocationsArray = root
-            .GetProperty("attributes")
-            .GetProperty("relationships")
-            .GetProperty("allocations")
-            .GetProperty("data");
+        var serversArray = root
+            .GetProperty("data")
+            .EnumerateArray();;
 
-        foreach (var alloc in allocationsArray.EnumerateArray())
+        foreach (var data in serversArray)
         {
-            var attr = alloc.GetProperty("attributes");
-            var ip = attr.GetProperty("ip").GetString() ?? string.Empty;
-            var port = attr.GetProperty("port").GetInt32();
-            var isDefault = attr.GetProperty("is_default").GetBoolean();
+            var attr = data.GetProperty("attributes");
+            var uuid = attr.GetProperty("uuid").GetString() ?? string.Empty;
+            
+            if ((serverUuid == null || uuid != serverUuid) && serverUuid != null) continue;
+            
+            var allocationsArray = attr.GetProperty("relationships").GetProperty("allocations").GetProperty("data").EnumerateArray();
+            foreach (var alloc in allocationsArray)
+            {
+                var attrib = alloc.GetProperty("attributes");
+                var ip = attrib.GetProperty("ip").GetString() ?? string.Empty;
+                var port = attrib.GetProperty("port").GetInt32();
+                var isDefault = attrib.GetProperty("is_default").GetBoolean();
 
-            allocations.Add(new ServerAllocation {
-                Ip = ip,
-                Port = port,
-                IsDefault = isDefault
-            });
+                allocations.Add(new ServerAllocation {
+                    Uuid = uuid,
+                    Ip = ip,
+                    Port = port,
+                    IsDefault = isDefault
+                });
+            }
         }
-
+        
         return allocations;
     }
     
@@ -154,15 +244,19 @@ public class JsonHandler
             .EnumerateArray();
         foreach (var server in serversArray)
         {
-            // Extract id, uuid, and name
             var id = server.GetProperty("attributes").GetProperty("id").GetInt32();
             var uuid = server.GetProperty("attributes").GetProperty("uuid").GetString() ?? string.Empty;
             var name = server.GetProperty("attributes").GetProperty("name").GetString() ?? string.Empty;
+            var egg = server.GetProperty("attributes").GetProperty("egg").GetInt32();
             
             serverInfo.Add(new ServerInfo {
                 Id = id,
                 Uuid = uuid,
-                Name = name
+                Name = name,
+                Egg = new EggInfo
+                {
+                    Id = egg
+                }
             });
         }
 

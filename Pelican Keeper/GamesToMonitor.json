@@ -1,0 +1,26 @@
+﻿[
+  {
+    "Game": "Ark: Survival Evolved",
+    "Protocol": "A2S",
+    "QueryPortVariable": "QUERY_PORT"
+  },
+  {
+    "Game": "ARK: Survival Ascended",
+    "Protocol": "RCON",
+    "RconPortVariable": "RCON_PORT",
+    "RconPasswordVariable": "ARK_ADMIN_PASSWORD",
+    "Command": "ListPlayers"
+  },
+  {
+    "Game": "Palworld Proton",
+    "Protocol": "RCON",
+    "RconPortVariable": "RCON_PORT",
+    "RconPasswordVariable": "ADMIN_PASSWORD",
+    "Command": "ShowPlayers"
+  },
+  {
+    "Game": "7 Days To Die",
+    "Protocol": "A2S",
+    "QueryPortVariable": "SERVER_PORT"
+  }
+]

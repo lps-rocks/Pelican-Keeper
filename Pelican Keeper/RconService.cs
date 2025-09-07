@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Pelican_Keeper;
 
-public class RconService(string ip, int port, string password) : ISendCommand
+public class RconService(string ip, int port, string password) : ISendCommand, IDisposable
 {
     private TcpClient? _tcpClient;
     private NetworkStream? _stream;
@@ -12,7 +12,7 @@ public class RconService(string ip, int port, string password) : ISendCommand
     public readonly string Ip = ip;
     public readonly int Port = port;
     
-    public async Task Connect() //TODO: Add Offline Server Handling
+    public async Task Connect()
     {
         _tcpClient = new TcpClient();
         await _tcpClient.ConnectAsync(Ip, Port);

@@ -84,9 +84,14 @@ public static class HelperClass
         };
     }
 
-    public static int ExtractPlayerCount(string serverResponse, string? regexPattern)
+    public static int ExtractPlayerCount(string? serverResponse, string? regexPattern)
     {
-        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo Player\b");
+        if (string.IsNullOrEmpty(serverResponse))
+        {
+            return 0;
+        }
+
+        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo\s+Players?\b[.!]?");
         if (noPlayer.Success) return 0;
         
         var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
@@ -97,37 +102,64 @@ public static class HelperClass
         
         var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
         if (arkRconPlayerList.Success)
+            return arkRconPlayerList.Length;
+
+        var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
+        if (palworldPlayerList.Success)
+            return palworldPlayerList.Length;
+        
+        // Custom User-defined regex pattern
+        if (regexPattern != null)
         {
-            var index = arkRconPlayerList.Groups[1].Value;     // player list index starting from 0
-            //var playerName = arkRconPlayerList.Groups[2].Value; // "FinalPlayer"
-            //var playerId = arkRconPlayerList.Groups[3].Value;   // "FinalId"
-            return int.Parse(index) + 1;
+            var customMatch = Regex.Match(serverResponse, regexPattern);
+            if (customMatch.Success)
+            {
+                if (!Int32.TryParse(customMatch.Value, out var count)) return count;
+                if (Program.Config.Debug)
+                    ConsoleExt.WriteLineWithPretext($"Custom Regex Returned: {count}");
+                return count;
+            }
         }
+        
         return 0;
     }
 
-    public static string PlayerCountCleanup(string serverResponse, string? regexPattern, string? maxPlayers = "Unknown")
+    public static string ServerPlayerCountDisplayCleanup(string? serverResponse, string? regexPattern, string? maxPlayers = "Unknown")
     {
-        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo Player\b");
+        if (serverResponse is "No response from RCON command." or "Command sent via Pelican API." or "No response from A2S query." && !string.IsNullOrEmpty(maxPlayers) && maxPlayers != "Unknown")
+        {
+            return $"N/A/{maxPlayers}";
+        }
+        
+        if (string.IsNullOrEmpty(serverResponse))
+        {
+            if (!string.IsNullOrEmpty(maxPlayers) && maxPlayers != "Unknown")
+            {
+                return $"N/A/{maxPlayers}";
+            }
+            return "N/A";
+        }
+
+        if (maxPlayers == "0")
+        {
+            maxPlayers = "Unknown";
+        }
+        
+        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo\s+Players?\b[.!]?");
         if (noPlayer.Success) return $"0/{maxPlayers}";
         
         var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
         if (playerMaxPlayer.Success)
-        {
             return playerMaxPlayer.Value;
-        }
-
-        if (regexPattern == @"(\d+)\.\s*([^,]+),\s*(.+)$")
-        {
-            
-        }
+        
         var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
         if (arkRconPlayerList.Success)
+            return $"{arkRconPlayerList.Length}/{maxPlayers}";
+        
+        var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
+        if (palworldPlayerList.Success || serverResponse.Contains("name,playeruid,steamid"))
         {
-            var index = arkRconPlayerList.Groups[1].Value;     // player list index starting from 0
-            //var playerName = arkRconPlayerList.Groups[2].Value; // "FinalPlayer"
-            //var playerId = arkRconPlayerList.Groups[3].Value;   // "FinalId"
-            return $"{int.Parse(index) + 1}/{maxPlayers}"; // Max players is unknown in this case
+            return $"{palworldPlayerList.Length}/{maxPlayers}";
         }
         
         // Custom User-defined regex pattern

@@ -4,100 +4,185 @@ using System.Text;
 
 namespace Pelican_Keeper;
 
-public class A2SService(string ip, int port) : ISendCommand
+public class A2SService(string ip, int port) : ISendCommand, IDisposable
 {
     private UdpClient? _udpClient;
     private IPEndPoint? _endPoint;
 
-    public Task Connect() //TODO: Add Offline Server Handling
+    public Task Connect()
     {
         _udpClient = new UdpClient();
         _endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
         _udpClient.Client.ReceiveTimeout = 3000;
-        
+
         ConsoleExt.WriteLineWithPretext("Connected to A2S server at " + _endPoint);
         return Task.CompletedTask;
     }
-    
+
     public async Task<string> SendCommandAsync(string? command = null)
     {
-        byte[] request = BuildA2SInfoPacket();
-        
         if (_udpClient == null || _endPoint == null)
             throw new InvalidOperationException("Call Connect() before sending commands.");
 
-        await _udpClient!.SendAsync(request, request.Length, _endPoint);
-        ConsoleExt.WriteLineWithPretext("Sent response to A2S server");
-        
-        UdpReceiveResult result;
-        try
+        // 1) Send initial A2S_INFO
+        var request = BuildA2SInfoPacket();
+        await _udpClient.SendAsync(request, request.Length, _endPoint);
+        ConsoleExt.WriteLineWithPretext("Sent A2S_INFO request");
+
+        // 2) Receive first response (could be info or challenge)
+        var first = await ReceiveWithTimeoutAsync(_udpClient, timeoutMs: 15000);
+        if (first == null)
         {
-            var receiveTask = _udpClient.ReceiveAsync();
-            if (await Task.WhenAny(receiveTask, Task.Delay(15000)) != receiveTask)
+            ConsoleExt.WriteLineWithPretext("Timed out waiting for server response.", ConsoleExt.OutputType.Error);
+            return "Timeout or no response";
+        }
+
+        if (Program.Config.Debug)
+        {
+            ConsoleExt.WriteLineWithPretext("Received response from A2S server (first packet).");
+            DumpBytes(first);
+        }
+
+        // Response header at offset 4
+        if (first.Length >= 5)
+        {
+            byte header = first[4];
+
+            // 0x41 = 'A' = S2C_CHALLENGE
+            if (header == 0x41 && first.Length >= 9)
             {
-                ConsoleExt.WriteLineWithPretext("Timed out waiting for server response.", ConsoleExt.OutputType.Error);
-                return "Timeout or no response";
+                // bytes 5..8 are the challenge (little endian)
+                int challenge = BitConverter.ToInt32(first, 5);
+                if (Program.Config.Debug)
+                    ConsoleExt.WriteLineWithPretext($"Received challenge: 0x{challenge:X8}");
+
+                // 3) Resend A2S_INFO including challenge
+                var challenged = BuildA2SInfoPacket(challenge);
+                await _udpClient.SendAsync(challenged, challenged.Length, _endPoint);
+                ConsoleExt.WriteLineWithPretext("Sent A2S_INFO request with challenge");
+
+                // 4) Receive the actual info response
+                var second = await ReceiveWithTimeoutAsync(_udpClient, timeoutMs: 15000);
+                if (second == null)
+                {
+                    ConsoleExt.WriteLineWithPretext("Timed out waiting for challenged info response.", ConsoleExt.OutputType.Error);
+                    return "Timeout or no response";
+                }
+
+                if (Program.Config.Debug)
+                {
+                    ConsoleExt.WriteLineWithPretext("Received challenged info response.");
+                    DumpBytes(second);
+                }
+
+                return ParseOrFail(second);
+            }
+            // 0x49 = 'I' = S2A_INFO (immediate info response, no challenge)
+            if (header == 0x49)
+            {
+                return ParseOrFail(first);
             }
 
-            result = receiveTask.Result;
+            // Some servers may reply multi-packet (0xFE) or other types; for simplicity, treat as unsupported here
             if (Program.Config.Debug)
-            {
-                ConsoleExt.WriteLineWithPretext("Received response from A2S server.");
-                DumpBytes(result.Buffer);
-            }
+                ConsoleExt.WriteLineWithPretext($"Unexpected response header: 0x{header:X2}", ConsoleExt.OutputType.Warning);
+        }
+
+        ConsoleExt.WriteLineWithPretext("Invalid or unexpected response.", ConsoleExt.OutputType.Error);
+        return "Failed to parse response.";
+    }
+
+    private static async Task<byte[]?> ReceiveWithTimeoutAsync(UdpClient udp, int timeoutMs)
+    {
+        try
+        {
+            var receiveTask = udp.ReceiveAsync();
+            var t = await Task.WhenAny(receiveTask, Task.Delay(timeoutMs));
+            if (t != receiveTask) return null;
+
+            var result = receiveTask.Result;
+            return result.Buffer;
         }
         catch (SocketException ex)
         {
             ConsoleExt.WriteLineWithPretext("No response from server.", ConsoleExt.OutputType.Error, ex);
-            return "No response from server.";
+            return null;
         }
-        
-        string parseResult = ParseA2SInfoResponse(result.Buffer);
-        
-        if (parseResult == string.Empty)
+    }
+
+    private static string ParseOrFail(byte[] buffer)
+    {
+        string parseResult = ParseA2SInfoResponse(buffer);
+
+        if (string.IsNullOrEmpty(parseResult))
         {
             ConsoleExt.WriteLineWithPretext("Failed to parse response.", ConsoleExt.OutputType.Error);
             return "Failed to parse response.";
         }
-        
+
         if (Program.Config.Debug)
             ConsoleExt.WriteLineWithPretext($"A2S request response: {parseResult}");
-        
+
         return parseResult;
     }
-    
-    static byte[] BuildA2SInfoPacket()
+
+    /// <summary>
+    /// A2S_INFO request: 0xFF 0xFF 0xFF 0xFF 'T' "Source Engine Query\0" [optional 4-byte challenge LE]
+    /// </summary>
+    private static byte[] BuildA2SInfoPacket(int? challenge = null)
     {
-        return new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, (byte)'T' }.Concat("Source Engine Query\0"u8.ToArray()).ToArray();
+        var head = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, (byte)'T' };
+        var query = "Source Engine Query\0"u8.ToArray();
+
+        if (challenge.HasValue)
+        {
+            var chall = BitConverter.GetBytes(challenge.Value); // little-endian
+            return head.Concat(query).Concat(chall).ToArray();
+        }
+
+        return head.Concat(query).ToArray();
     }
 
-    static string ParseA2SInfoResponse(byte[] buffer)
+    /// <summary>
+    /// Parses S2A_INFO (0x49) response. Returns "players/maxPlayers" or empty on failure.
+    /// </summary>
+    private static string ParseA2SInfoResponse(byte[] buffer)
     {
+        // Need at least header + 1 type byte
+        if (buffer.Length < 5) return string.Empty;
+
         int index = 4; // Skips the initial 4 bytes (0xFF 0xFF 0xFF 0xFF)
         byte header = buffer[index++];
-        if (header != 0x49)
+        if (header != 0x49) // 'I'
         {
-            ConsoleExt.WriteLineWithPretext("Invalid response.", ConsoleExt.OutputType.Error);
+            ConsoleExt.WriteLineWithPretext($"Invalid response (expected 0x49, got 0x{header:X2}).", ConsoleExt.OutputType.Error);
             return string.Empty;
         }
 
+        if (index >= buffer.Length) return string.Empty;
+
         byte protocol = buffer[index++];
+
         string name = ReadNullTerminatedString(buffer, ref index);
         string map = ReadNullTerminatedString(buffer, ref index);
         string folder = ReadNullTerminatedString(buffer, ref index);
         string game = ReadNullTerminatedString(buffer, ref index);
+
+        if (index + 2 > buffer.Length) return string.Empty;
         short appId = BitConverter.ToInt16(buffer, index); index += 2;
+
+        if (index + 3 > buffer.Length) return string.Empty;
         byte players = buffer[index++];
         byte maxPlayers = buffer[index++];
-        byte bots = buffer[index];
-        
+        byte bots = buffer[index++]; // advance!
+
         if (Program.Config.Debug)
         {
             ConsoleExt.WriteLineWithPretext("A2S Info Response:");
             ConsoleExt.WriteLineWithPretext($"Protocol: {protocol}");
             ConsoleExt.WriteLineWithPretext($"App ID: {appId}");
             ConsoleExt.WriteLineWithPretext($"Folder: {folder}");
-            
+
             ConsoleExt.WriteLineWithPretext("Server Name: " + name);
             ConsoleExt.WriteLineWithPretext("Map: " + map);
             ConsoleExt.WriteLineWithPretext("Game: " + game);
@@ -107,7 +192,7 @@ public class A2SService(string ip, int port) : ISendCommand
 
         return $"{players}/{maxPlayers}";
     }
-    
+
     public void Dispose()
     {
         _udpClient?.Close();
@@ -115,17 +200,17 @@ public class A2SService(string ip, int port) : ISendCommand
         _endPoint = null;
     }
 
-    static string ReadNullTerminatedString(byte[] buffer, ref int index)
+    private static string ReadNullTerminatedString(byte[] buffer, ref int index)
     {
         int start = index;
         while (index < buffer.Length && buffer[index] != 0)
             index++;
         string result = Encoding.UTF8.GetString(buffer, start, index - start);
-        index++; // Skip null byte
+        if (index < buffer.Length) index++; // Skip null byte safely
         return result;
     }
-    
-    static void DumpBytes(byte[] data)
+
+    private static void DumpBytes(byte[] data)
     {
         Console.WriteLine("[Hex Dump]");
         for (int i = 0; i < data.Length; i += 16)

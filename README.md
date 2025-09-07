@@ -26,9 +26,10 @@ This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 | Custom Templates        | Markdown style message embed system for customizable structure              | ✅           |
 | Button navigation       | Navigate Paginated messages using buttons                                   | ✅           |
 | Auto Updates            | Messages update automatically every X seconds                               | ✅           |
-| Player Count            | Show live player count from server (if supported)                           | ❌ (Planned) |
+| Player Count            | Show live player count from server (if supported)                           | ✅ |
 | Server Joinable IP:Port | Show server joinable IP:Port                                                | ✅ |
 | Pelican Egg             | Installable Egg where you can run and configure the bot in the panel        | ❌ (Planned) |
+
 
 
 ## Setup in Pelican

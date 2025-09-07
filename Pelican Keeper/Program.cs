@@ -264,7 +264,7 @@ internal static class Program
                             
                             if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
                             {
-                                int index = 1;
+                                int index = 0;
                                 List<string?> selectedServerUuids;
                                 
                                 if (Config.AllowServerStartup is { Length: > 0 } && Config.AllowServerStartup[0] != "UUIDS HERE")
@@ -276,7 +276,7 @@ internal static class Program
                                     selectedServerUuids = uuids;
                                 }
                                 
-                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, serverUuids, $"{index++}: Start")).Cast<DiscordComponent>().ToList();
+                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, serverUuids, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
 
                                 WriteLineWithPretext("Buttons created: " + buttons.Count);
                                 await msg.ModifyAsync(mb =>
@@ -303,8 +303,8 @@ internal static class Program
                         {
                             if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
                             {
-                                int index = 1;
-                                List<DiscordComponent> buttons = uuids.Select(uuid => new DiscordButtonComponent(ButtonStyle.Primary, uuid, $"{index++}: Start")).Cast<DiscordComponent>().ToList();
+                                int index = 0;
+                                List<DiscordComponent> buttons = uuids.Select(uuid => new DiscordButtonComponent(ButtonStyle.Primary, uuid, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
 
                                 WriteLineWithPretext("Buttons created: " + buttons.Count);
                                 var msg = await channel.SendMessageAsync(mb =>

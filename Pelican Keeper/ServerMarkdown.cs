@@ -85,7 +85,7 @@ public static class ServerMarkdown
         
         if (Program.Config.PlayerCountDisplay)
         {
-            viewModel.PlayerCount = serverResponse.PlayerCountText ?? "N/A";
+            viewModel.PlayerCount = string.IsNullOrEmpty(serverResponse.PlayerCountText) ? "N/A" : serverResponse.PlayerCountText;
         }
 
         var result = PreprocessTemplateTags(viewModel);

@@ -8,6 +8,7 @@
   
   "JoinableIpDisplay": true,
   "PlayerCountDisplay": true,
+  "ServersToMonitor": ["UUIDS HERE"],
   
   "AutomaticShutdown": true,
   "ServersToAutoShutdown": ["UUIDS HERE"],
@@ -16,7 +17,7 @@
   "AllowServerStartup": ["UUIDS HERE"],
   
   "ContinuesMarkdownRead": true,
-  "ContinuesServerToMonitorRead": true,
+  "ContinuesGamesToMonitorRead": true,
   "MarkdownUpdateInterval": 30,
   "ServerUpdateInterval": 10,
   

@@ -9,9 +9,32 @@ using static HelperClass;
 
 public static class PelicanInterface
 {
-    private static List<ServersToMonitor>? _gameCommunicationJson;
+    private static List<GamesToMonitor>? _gamesToMonitor;
+    private static List<EggInfo>? _eggsList;
     private static List<RconService> _rconServices = new();
     private static Dictionary<string, DateTime> _shutdownTracker = new();
+
+    private static void GetEggList()
+    {
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/application/eggs");
+        var response = CreateRequest(client, Program.Secrets.ClientToken);
+        
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(response.Content))
+            {
+                _eggsList = JsonHandler.ExtractEggInfo(response.Content);
+                return;
+            }
+            
+            ConsoleExt.WriteLineWithPretext("Empty Egg List response content.");
+        }
+        catch (JsonException ex)
+        {
+            ConsoleExt.WriteLineWithPretext("JSON deserialization or fetching Error: " + ex.Message);
+            ConsoleExt.WriteLineWithPretext("Response content: " + response.Content);
+        }
+    }
     
     /// <summary>
     /// Gets the server stats from the Pelican API
@@ -47,81 +70,81 @@ public static class PelicanInterface
         }
     }
 
-    private static void GetServerAllocations(ServerInfo serverInfo)
+    private static void GetServerAllocations(List<ServerInfo> serverInfos)
     {
-        if (string.IsNullOrWhiteSpace(serverInfo.Uuid))
-        {
-            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
-            return;
-        }
-        
-        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/" + serverInfo.Uuid);
+        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/?type=admin-all");
         var response = CreateRequest(client, Program.Secrets.ClientToken);
-
+        
         try
         {
             if (!string.IsNullOrWhiteSpace(response.Content))
             {
-                var allocations = JsonHandler.ExtractAllocations(response.Content);
-                serverInfo.Allocations = allocations;
+                var allocations = JsonHandler.ExtractNetworkAllocations(response.Content);
+                foreach (var serverInfo in serverInfos)
+                {
+                    serverInfo.Allocations = allocations.Where(s => s.Uuid == serverInfo.Uuid).ToList();
+                }
                 if (!Program.Config.PlayerCountDisplay) return;
                 
-                bool isTracked = _shutdownTracker.Any(x => x.Key == serverInfo.Uuid);
-                if (serverInfo.Resources?.CurrentState.ToLower() != "offline" && serverInfo.Resources?.CurrentState.ToLower() != "stopping" && serverInfo.Resources?.CurrentState.ToLower() != "starting" && serverInfo.Resources?.CurrentState.ToLower() != "missing")
+                foreach (var serverInfo in serverInfos)
                 {
-                    if (!isTracked)
+                    bool isTracked = _shutdownTracker.Any(x => x.Key == serverInfo.Uuid);
+                    if (serverInfo.Resources?.CurrentState.ToLower() != "offline" && serverInfo.Resources?.CurrentState.ToLower() != "stopping" && serverInfo.Resources?.CurrentState.ToLower() != "starting" && serverInfo.Resources?.CurrentState.ToLower() != "missing")
                     {
-                        _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
-                        ConsoleExt.WriteLineWithPretext($"{serverInfo.Name} is tracked for shutdown: {isTracked}");
-                    }
-                    MonitorServers(serverInfo, response.Content);
-                    
-                    if (Program.Config.AutomaticShutdown)
-                    {
-                        if (serverInfo.PlayerCountText != "N/A" && !string.IsNullOrEmpty(serverInfo.PlayerCountText))
+                        if (!isTracked)
                         {
-                            if (Program.Config.ServersToAutoShutdown != null && Program.Config.ServersToAutoShutdown[0] != "UUIDS HERE" && !Program.Config.ServersToAutoShutdown.Contains(serverInfo.Uuid))
+                            _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
+                            ConsoleExt.WriteLineWithPretext($"{serverInfo.Name} is tracked for shutdown: {isTracked}");
+                        }
+                        MonitorServers(serverInfo, response.Content);
+                        
+                        if (Program.Config.AutomaticShutdown)
+                        {
+                            if (serverInfo.PlayerCountText != "N/A" && !string.IsNullOrEmpty(serverInfo.PlayerCountText))
                             {
-                                if (Program.Config.Debug)
-                                    ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is not in the auto-shutdown list. Skipping shutdown check.");
-                                return;
-                            }
-                            
-                            if (_gameCommunicationJson == null || _gameCommunicationJson.Count == 0)
-                            {
-                                if (Program.Config.Debug)
-                                    ConsoleExt.WriteLineWithPretext("No game communication configuration found. Skipping shutdown check.", ConsoleExt.OutputType.Warning);
-                                return;
-                            }
-                            int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText, _gameCommunicationJson.First(s => s.Uuid == serverInfo.Uuid).PlayerCountExtractRegex);
-                            if (Program.Config.Debug)
-                                ConsoleExt.WriteLineWithPretext("Player count: " + playerCount + " for server: " + serverInfo.Name);
-                            if (playerCount > 0)
-                            {
-                                _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
-                            }
-                            else
-                            {
-                                TimeSpan.TryParse(Program.Config.EmptyServerTimeout, out var timeTillShutdown);
-                                if (timeTillShutdown == TimeSpan.Zero)
-                                    timeTillShutdown = TimeSpan.FromHours(1);
-                                if (DateTime.Now - _shutdownTracker[serverInfo.Uuid] >= timeTillShutdown)
+                                if (Program.Config.ServersToAutoShutdown != null && Program.Config.ServersToAutoShutdown[0] != "UUIDS HERE" && !Program.Config.ServersToAutoShutdown.Contains(serverInfo.Uuid))
                                 {
-                                    SendPowerCommand(serverInfo.Uuid, "stop");
-                                    ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} has been empty for over an hour. Sending shutdown command.");
-                                    _shutdownTracker.Remove(serverInfo.Uuid);
                                     if (Program.Config.Debug)
-                                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is stopping and removed from shutdown tracker.");
+                                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is not in the auto-shutdown list. Skipping shutdown check.");
+                                    continue;
+                                }
+                                
+                                if (_gamesToMonitor == null || _gamesToMonitor.Count == 0)
+                                {
+                                    if (Program.Config.Debug)
+                                        ConsoleExt.WriteLineWithPretext("No game communication configuration found. Skipping shutdown check.", ConsoleExt.OutputType.Warning);
+                                    continue;
+                                }
+                                int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText, _gamesToMonitor.First(s => s.Game == serverInfo.Egg.Name).PlayerCountExtractRegex);
+                                if (Program.Config.Debug)
+                                    ConsoleExt.WriteLineWithPretext("Player count: " + playerCount + " for server: " + serverInfo.Name);
+                                if (playerCount > 0)
+                                {
+                                    _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
+                                }
+                                else
+                                {
+                                    TimeSpan.TryParseExact(Program.Config.EmptyServerTimeout, @"d\:hh\:mm", CultureInfo.InvariantCulture, out var timeTillShutdown);
+                                    if (timeTillShutdown == TimeSpan.Zero)
+                                        timeTillShutdown = TimeSpan.FromHours(1);
+                                    if (DateTime.Now - _shutdownTracker[serverInfo.Uuid] >= timeTillShutdown)
+                                    {
+                                        SendPowerCommand(serverInfo.Uuid, "stop");
+                                        ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} has been empty for over an hour. Sending shutdown command.");
+                                        _shutdownTracker.Remove(serverInfo.Uuid);
+                                        if (Program.Config.Debug)
+                                            ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is stopping and removed from shutdown tracker.");
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                else if (isTracked)
-                {
-                    _shutdownTracker.Remove(serverInfo.Uuid);
-                    if (Program.Config.Debug)
-                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is offline or stopping. Removed from shutdown tracker.");
+                    else if (isTracked)
+                    {
+                        _shutdownTracker.Remove(serverInfo.Uuid);
+                        if (Program.Config.Debug)
+                            ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is offline or stopping. Removed from shutdown tracker.");
+                    }
                 }
                 return;
             }
@@ -149,6 +172,16 @@ public static class PelicanInterface
             if (response.Content != null)
             {
                 var servers = JsonHandler.ExtractServerListInfo(response.Content);
+                GetEggList();
+                foreach (var serverInfo in servers)
+                {
+                    var foundEgg = _eggsList?.Find(x => x.Id == serverInfo.Egg.Id);
+                    if (foundEgg == null) continue;
+                    serverInfo.Egg.Name = foundEgg.Name;
+                    if (Program.Config.Debug)
+                        ConsoleExt.WriteLineWithPretext($"Egg Name found: {serverInfo.Egg.Name}");
+                }
+                
                 _ = GetServerStatsList(servers);
                 
                 if (Program.Config.ServersToIgnore != null && Program.Config.ServersToIgnore.Length > 0 && Program.Config.ServersToIgnore[0] != "UUIDS HERE")
@@ -206,26 +239,11 @@ public static class PelicanInterface
             }
             finally { sem.Release(); }
         });
-
-        // Allocations tasks
-        IEnumerable<Task> allocTasks = [];
-        if (Program.Config.JoinableIpDisplay)
-        {
-            allocTasks = servers.Select(async server =>
-            {
-                await sem.WaitAsync();
-                try
-                {
-                    if (Program.Config.Debug)
-                        ConsoleExt.WriteLineWithPretext("Fetched allocations for server: " + server.Name);
-                    GetServerAllocations(server);
-                }
-                finally { sem.Release(); }
-            });
-        }
-
+        
         // Run them all
-        await Task.WhenAll(statsTasks.Concat(allocTasks));
+        await Task.WhenAll(statsTasks);
+        
+        GetServerAllocations(servers);
     }
     
     private static string? SendGameServerCommand(string? uuid, string command) //TODO: I need to figure out a way to extract to the current player count and the maximum player count out of the return string where the max player count can be optional
@@ -248,7 +266,7 @@ public static class PelicanInterface
         request.AddHeader("Authorization", $"Bearer {Program.Secrets.ClientToken}");
         request.AddHeader("Content-Type", "application/json");
 
-        var body = new { signal = $"{command}" };
+        var body = new { command = $"{command}" };
         request.AddStringBody(JsonSerializer.Serialize(body), ContentType.Json);
 
         var response = client.Execute(request);
@@ -321,23 +339,30 @@ public static class PelicanInterface
 
     private static void MonitorServers(ServerInfo serverInfo, string json)
     {
-        if (_gameCommunicationJson == null || _gameCommunicationJson.Count == 0) return;
+        if (_gamesToMonitor == null || _gamesToMonitor.Count == 0) return;
         
-        var serverToMonitor = _gameCommunicationJson.FirstOrDefault(s => s.Uuid == serverInfo.Uuid);
+        var serverToMonitor = _gamesToMonitor.FirstOrDefault(s => s.Game == serverInfo.Egg.Name);
         if (serverToMonitor == null)
         {
             if (Program.Config.Debug)
                 ConsoleExt.WriteLineWithPretext("No monitoring configuration found for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
             return;
         }
-        
+        ConsoleExt.WriteLineWithPretext($"Found Game to Monitor {serverToMonitor.Game}", ConsoleExt.OutputType.Warning);
+        ConsoleExt.WriteLineWithPretext($"Found Game's Max Player Count {serverToMonitor.MaxPlayerVariable}", ConsoleExt.OutputType.Warning);
+
+        int maxPlayers = JsonHandler.ExtractMaxPlayerCount(json, serverInfo.Uuid, serverToMonitor.MaxPlayerVariable);
+
         if (serverInfo.PlayerCountText != null)
-            serverInfo.PlayerCountText = PlayerCountCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, JsonHandler.ExtractMaxPlayerCount(json, serverToMonitor.MaxPlayerVariable).ToString());
+        {
+            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+        }
         switch (serverToMonitor.Protocol)
         {
             case CommandExecutionMethod.A2S:
             {
-                int queryPort = JsonHandler.ExtractQueryPort(json, serverToMonitor.QueryPortVariable);
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverInfo.Uuid, serverToMonitor.QueryPortVariable);
+
                 ConsoleExt.WriteLineWithPretext("Query port for server " + serverInfo.Name + ": " + queryPort);
                 if (queryPort == 0)
                 {
@@ -349,15 +374,15 @@ public static class PelicanInterface
                 {
                     ConsoleExt.WriteLineWithPretext("Sending A2S request to " + Program.Secrets.ExternalServerIp + ":" + queryPort + " for server " + serverInfo.Name);
                     var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = a2SResponse ?? "No response from A2S query.";
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse ?? "No response from A2S query.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
                 }
 
                 return;
             }
             case CommandExecutionMethod.Rcon:
             {
-                int rconPort = JsonHandler.ExtractRconPort(json, serverToMonitor.RconPortVariable);
-                string rconPassword = JsonHandler.ExtractRconPassword(json, serverToMonitor.RconPasswordVariable);
+                int rconPort = JsonHandler.ExtractRconPort(json, serverInfo.Uuid, serverToMonitor.RconPortVariable);
+                var rconPassword = serverToMonitor.RconPassword ?? JsonHandler.ExtractRconPassword(json, serverInfo.Uuid, serverToMonitor.RconPasswordVariable);
                 
                 if (rconPort == 0 || string.IsNullOrWhiteSpace(rconPassword))
                 {
@@ -368,7 +393,7 @@ public static class PelicanInterface
                 if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null)
                 {
                     var rconResponse = SendGameServerCommandRcon(Program.Secrets.ExternalServerIp, rconPort, rconPassword, serverToMonitor.Command).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = rconResponse ?? "No response from RCON command.";
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse ?? "No response from RCON command.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
                 }
                 
                 break;
@@ -390,9 +415,9 @@ public static class PelicanInterface
     {
         Task.Run(async () =>
         {
-            while (Program.Config.ContinuesServerToMonitorRead)
+            while (Program.Config.ContinuesGamesToMonitorRead)
             {
-                _gameCommunicationJson = await FileManager.ReadGameCommunicationFile();
+                _gamesToMonitor = await FileManager.ReadGamesToMonitorFile();
                 await Task.Delay(TimeSpan.FromSeconds(Program.Config.MarkdownUpdateInterval));
             }
         });

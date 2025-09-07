@@ -11,7 +11,7 @@ public class RconTesting
     public async Task Setup()
     {
         _secrets = await FileManager.ReadSecretsFile();
-        _config = await FileManager.ReadConfigFile();
+        _config = TestConfigCreator.CreateDefaultConfigInstance();
     }
 
     [Test]
@@ -22,18 +22,13 @@ public class RconTesting
             Assert.Fail("Secrets or Config not loaded properly.");
             return;
         }
-        
-        await PelicanInterface.SendGameServerCommandRcon(_secrets.ExternalServerIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
-        
+
+        if (_secrets.ExternalServerIp != null)
+            await PelicanInterface.SendGameServerCommandRcon(_secrets.ExternalServerIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
+
         if (ConsoleExt.ExceptionOccurred)
-        {
             Assert.Fail($"Test failed due to exception(s): {ConsoleExt.Exceptions}");
-        }
         else
-        {
             Assert.Pass("Rcon command sent successfully.");
-        }
     }
-    
-    
 }
