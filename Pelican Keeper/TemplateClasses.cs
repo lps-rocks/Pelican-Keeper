@@ -64,7 +64,11 @@ public abstract class TemplateClasses
         public string? EmptyServerTimeout { get; init; }
         public bool AllowUserServerStartup { get; init; }
         public string[]? AllowServerStartup { get; init; }
-        
+        public string[]? UsersAllowedToStartServers { get; init; }
+        public bool AllowUserServerStopping { get; init; }
+        public string[]? AllowServerStopping { get; init; }
+        public string[]? UsersAllowedToStopServers { get; init; }
+
         public bool ContinuesMarkdownRead { get; init; }
         public bool ContinuesGamesToMonitorRead { get; init; }
         public int MarkdownUpdateInterval { get; init; }

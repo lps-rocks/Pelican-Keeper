@@ -53,6 +53,7 @@ internal static class Program
         discord.MessageDeleted += OnMessageDeleted;
         discord.ComponentInteractionCreated += OnPageFlipInteraction;
         discord.ComponentInteractionCreated += OnServerStartInteraction;
+        discord.ComponentInteractionCreated += OnServerStopInteraction;
         
         await discord.ConnectAsync();
         await Task.Delay(-1);
@@ -101,21 +102,32 @@ internal static class Program
         try
         {
             // treat "UUIDS HERE" placeholder or empty/null list as "allow all"
-            bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-            WriteLineWithPretext(Config.AllowServerStartup[0]);
-            WriteLineWithPretext("show all: " + allowAll);
+            bool allowAllStart = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+            WriteLineWithPretext("show all Start: " + allowAllStart);
 
             // allow only if user-startup enabled, not ignoring offline, and either allow-all or in allow-list
-            bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(_serverInfo[index].Uuid, StringComparer.OrdinalIgnoreCase));
-            WriteLineWithPretext("show start: " + showStart);
+            bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAllStart || Config.AllowServerStartup.Contains(_serverInfo[index].Uuid, StringComparer.OrdinalIgnoreCase));
+            WriteLineWithPretext("show Start: " + showStart);
+            
+            // treat "UUIDS HERE" placeholder or empty/null list as "allow all"
+            bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+            WriteLineWithPretext("show all Stop: " + allowAllStop);
+
+            // allow only if user-startup enabled, not ignoring offline, and either allow-all or in stop-list
+            bool showStop = Config is { AllowUserServerStopping: true, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(_serverInfo[index].Uuid, StringComparer.OrdinalIgnoreCase));
+            WriteLineWithPretext("show Stop: " + showStop);
 
             var components = new List<DiscordComponent>
             {
                 new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous")
             };
-            if (showStart)
+            if (showStop)
             {
-                components.Add(new DiscordButtonComponent(ButtonStyle.Primary, _serverInfo[index].Uuid, "Start"));
+                components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"Start: {_serverInfo[index].Uuid}", $"Start"));
+            }
+            if (showStop)
+            {
+                components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"Stop: {_serverInfo[index].Uuid}", $"Stop"));
             }
             components.Add(new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️"));
             await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
@@ -152,6 +164,11 @@ internal static class Program
             return Task.CompletedTask;
         }
 
+        if (!e.Id.ToLower().Contains("start") || Config.UsersAllowedToStartServers != null && string.Equals(Config.UsersAllowedToStartServers[0], "USERID HERE", StringComparison.Ordinal) && Config.UsersAllowedToStartServers.Length != 0 && !Config.UsersAllowedToStartServers.Contains(e.User.Id.ToString()))
+        {
+            return Task.CompletedTask;
+        }
+
         if (Config.Debug)
             WriteLineWithPretext("User " + e.User.Username + " clicked button with ID: " + e.Id);
         
@@ -169,6 +186,42 @@ internal static class Program
             SendPowerCommand(server.Uuid, "start");
             if (Config.Debug)
                 WriteLineWithPretext("Start command sent to server " + server.Name);
+            await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        }
+        return Task.CompletedTask;
+    }
+    
+    private static async Task<Task> OnServerStopInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
+    {
+        if (e.User.IsBot)
+        {
+            if (Config.Debug)
+                WriteLineWithPretext("User is a Bot!", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+        
+        if (!e.Id.ToLower().Contains("stop") || Config.UsersAllowedToStopServers != null && string.Equals(Config.UsersAllowedToStopServers[0], "USERID HERE", StringComparison.Ordinal) && Config.UsersAllowedToStopServers.Length != 0 && !Config.UsersAllowedToStopServers.Contains(e.User.Id.ToString()))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (Config.Debug)
+            WriteLineWithPretext("User " + e.User.Username + " clicked button with ID: " + e.Id);
+        
+        var id = e.Id;
+        var server = _serverInfo.FirstOrDefault(s => s.Uuid == id);
+        if (server == null)
+        {
+            if (Config.Debug)
+                WriteLineWithPretext($"No server found with UUID {id}", OutputType.Warning);
+            return Task.CompletedTask;
+        }
+
+        if (server.Resources?.CurrentState.ToLower() == "online")
+        {
+            SendPowerCommand(server.Uuid, "stop");
+            if (Config.Debug)
+                WriteLineWithPretext("Stop command sent to server " + server.Name);
             await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
         }
         return Task.CompletedTask;
@@ -276,7 +329,7 @@ internal static class Program
                                     selectedServerUuids = uuids;
                                 }
                                 
-                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, serverUuids, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
+                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, $"Start: {serverUuids}", $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList(); //TODO: add Stopping command
 
                                 WriteLineWithPretext("Buttons created: " + buttons.Count);
                                 await msg.ModifyAsync(mb =>
@@ -304,7 +357,7 @@ internal static class Program
                             if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
                             {
                                 int index = 0;
-                                List<DiscordComponent> buttons = uuids.Select(uuid => new DiscordButtonComponent(ButtonStyle.Primary, uuid, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
+                                List<DiscordComponent> buttons = uuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, $"Start: {serverUuids}", $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
 
                                 WriteLineWithPretext("Buttons created: " + buttons.Count);
                                 var msg = await channel.SendMessageAsync(mb =>
@@ -375,16 +428,34 @@ internal static class Program
                         {
                             if (!Config.DryRun)
                             {
-                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                bool allowAllStart = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAllStart || Config.AllowServerStartup.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
                                 
-                                WriteLineWithPretext("show all: " + allowAll);
-                                WriteLineWithPretext("show start: " + showStart);
+                                WriteLineWithPretext("show all Start: " + allowAllStart);
+                                WriteLineWithPretext("show Start: " + showStart);
                                 
-                                if (showStart)
+                                bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                
+                                WriteLineWithPretext("show all Stop: " + allowAllStop);
+                                WriteLineWithPretext("show Stop: " + showStop);
+                                
+                                if (showStart && !showStop)
                                 {
                                     string? uuid = uuids[0];
                                     var msg = await channel.SendPaginatedMessageAsync(embeds, uuid);
+                                    LiveMessageStorage.Save(msg.Id, 0);
+                                }
+                                if (!showStart && showStop)
+                                {
+                                    string? uuid = uuids[0];
+                                    var msg = await channel.SendPaginatedMessageAsync(embeds, null, uuid);
+                                    LiveMessageStorage.Save(msg.Id, 0);
+                                }
+                                if (showStart && showStop)
+                                {
+                                    string? uuid = uuids[0];
+                                    var msg = await channel.SendPaginatedMessageAsync(embeds, uuid, uuid);
                                     LiveMessageStorage.Save(msg.Id, 0);
                                 }
                                 else
@@ -436,23 +507,19 @@ internal static class Program
                                 
                                 bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
                                 bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                
+                                bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
 
-                                if (showStart)
+                                await msg.ModifyAsync(mb =>
                                 {
-                                    await msg.ModifyAsync(mb =>
-                                    {
-                                        mb.WithEmbed(embed);
+                                    mb.WithEmbed(embed);
+                                    mb.ClearComponents();
+                                    if (showStart)
                                         mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
-                                    });
-                                }
-                                else
-                                {
-                                    await msg.ModifyAsync(mb =>
-                                    {
-                                        mb.WithEmbed(embed);
-                                        mb.ClearComponents();
-                                    });
-                                }
+                                    if (showStop)
+                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Stop"));
+                                });
                             }
                             else if (Config.Debug)
                             {
@@ -466,20 +533,18 @@ internal static class Program
                                 bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
                                 bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
                                 
-                                if (showStart)
+                                bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                
+                                var msg = await channel.SendMessageAsync(mb =>
                                 {
-                                    var msg = await channel.SendMessageAsync(mb =>
-                                    {
-                                        mb.WithEmbed(embed);
+                                    mb.WithEmbed(embed);
+                                    if (showStart)
                                         mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
-                                    });
-                                    LiveMessageStorage.Save(msg.Id);
-                                }
-                                else
-                                {
-                                    var msg = await channel.SendMessageAsync(embed);
-                                    LiveMessageStorage.Save(msg.Id);
-                                }
+                                    if (showStop)
+                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Stop"));
+                                });
+                                LiveMessageStorage.Save(msg.Id);
                             }
                         }
                     },
@@ -530,26 +595,19 @@ internal static class Program
     /// <param name="channel">Target channel</param>
     /// <param name="embeds">List of embeds to paginate</param>
     /// <returns>The discord message</returns>
-    private static async Task<DiscordMessage> SendPaginatedMessageAsync(this DiscordChannel channel, List<DiscordEmbed> embeds, string? uuid = null)
+    private static async Task<DiscordMessage> SendPaginatedMessageAsync(this DiscordChannel channel, List<DiscordEmbed> embeds, string? uuid = null, string? uuid2 = null)
     {
-        DiscordComponent[] buttons;
+        List<DiscordComponent> buttons =
+        [
+            new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous")
+        ];
         if (uuid != null)
         {
-            buttons =
-            [
-                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-                new DiscordButtonComponent(ButtonStyle.Primary, uuid, "Start"),
-                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-            ];
+            buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary,$"Start: {uuid}", "Start"));
+            if (uuid2 != null)
+                buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"Stop: {uuid2}", "Stop"));
         }
-        else
-        {
-            buttons =
-            [
-                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-            ];
-        }
+        buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️"));
 
         var messageBuilder = new DiscordMessageBuilder()
             .WithEmbed(embeds[0])
