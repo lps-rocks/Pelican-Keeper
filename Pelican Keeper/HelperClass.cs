@@ -67,6 +67,8 @@ public static class HelperClass
                 return $"{allocation.Ip}:{allocation.Port}";
             }
         }
+
+        ConsoleExt.WriteLineWithPretext($"External IP: {Program.Secrets.ExternalServerIp}");
         return $"{Program.Secrets.ExternalServerIp}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
     }
     
