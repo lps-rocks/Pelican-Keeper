@@ -42,7 +42,7 @@ public abstract class TemplateClasses
         public string? ServerToken { get; init; }
         public string? ServerUrl { get; init; }
         public string? BotToken { get; init; }
-        public ulong ChannelId { get; init; }
+        public ulong[]? ChannelIds { get; init; }
         public string? ExternalServerIp { get; init; }
     }
     

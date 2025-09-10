@@ -110,32 +110,58 @@ public static class LiveMessageStorage
     }
     
     /// <summary>
-    /// Validates the cache and removes any messages that no longer exist in the channel.
+    /// Validates the cache and removes any messages that no longer exist in the configured channels.
     /// </summary>
     private static async Task ValidateCache()
     {
+        var channels = Program.TargetChannel;
+        bool haveChannels = channels is { Count: > 0 };
+
+        // Helper local: does this message exist in any target channel?
+        static async Task<bool> ExistsInAnyAsync(IReadOnlyList<DiscordChannel> chans, ulong messageId)
+        {
+            foreach (var ch in chans)
+            {
+                try
+                {
+                    // If GetMessageAsync succeeds, the message exists in this channel.
+                    _ = await ch.GetMessageAsync(messageId);
+                    return true;
+                }
+                catch
+                {
+                    // Not found / no perms / etc. — try next channel
+                }
+            }
+            return false;
+        }
+
         if (Cache is { LiveStore: not null })
         {
             var filtered = await Cache.LiveStore
                 .ToAsyncEnumerable()
-                .WhereAwait(async x => Program.TargetChannel != null && await MessageExistsAsync(Program.TargetChannel, x))
+                .WhereAwait(async id =>
+                    haveChannels && await ExistsInAnyAsync(channels!, id))
                 .ToHashSetAsync();
             Cache.LiveStore = filtered;
         }
-        
+
         if (Cache is { PaginatedLiveStore: not null })
         {
             var filtered = await Cache.PaginatedLiveStore
                 .ToAsyncEnumerable()
-                .WhereAwait(async x => Program.TargetChannel != null && await MessageExistsAsync(Program.TargetChannel, x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value);
+                .WhereAwait(async kvp =>
+                    haveChannels && await ExistsInAnyAsync(channels!, kvp.Key))
+                .ToDictionaryAsync(kvp => kvp.Key, kvp => kvp.Value);
             Cache.PaginatedLiveStore = filtered;
         }
 
-        await File.WriteAllTextAsync(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        }));
+        await File.WriteAllTextAsync(
+            HistoryFilePath,
+            JsonSerializer.Serialize(Cache, new JsonSerializerOptions { WriteIndented = true })
+        );
     }
+
 
     /// <summary>
     /// Checks if a message exists in a channel.
