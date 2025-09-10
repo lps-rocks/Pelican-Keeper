@@ -117,31 +117,12 @@ public static class LiveMessageStorage
         var channels = Program.TargetChannel;
         bool haveChannels = channels is { Count: > 0 };
 
-        // Helper local: does this message exist in any target channel?
-        static async Task<bool> ExistsInAnyAsync(IReadOnlyList<DiscordChannel> chans, ulong messageId)
-        {
-            foreach (var ch in chans)
-            {
-                try
-                {
-                    // If GetMessageAsync succeeds, the message exists in this channel.
-                    _ = await ch.GetMessageAsync(messageId);
-                    return true;
-                }
-                catch
-                {
-                    // Not found / no perms / etc. — try next channel
-                }
-            }
-            return false;
-        }
-
         if (Cache is { LiveStore: not null })
         {
             var filtered = await Cache.LiveStore
                 .ToAsyncEnumerable()
                 .WhereAwait(async id =>
-                    haveChannels && await ExistsInAnyAsync(channels!, id))
+                    haveChannels && await MessageExistsAsync(channels!, id))
                 .ToHashSetAsync();
             Cache.LiveStore = filtered;
         }
@@ -151,7 +132,7 @@ public static class LiveMessageStorage
             var filtered = await Cache.PaginatedLiveStore
                 .ToAsyncEnumerable()
                 .WhereAwait(async kvp =>
-                    haveChannels && await ExistsInAnyAsync(channels!, kvp.Key))
+                    haveChannels && await MessageExistsAsync(channels!, kvp.Key))
                 .ToDictionaryAsync(kvp => kvp.Key, kvp => kvp.Value);
             Cache.PaginatedLiveStore = filtered;
         }
@@ -166,22 +147,27 @@ public static class LiveMessageStorage
     /// <summary>
     /// Checks if a message exists in a channel.
     /// </summary>
-    /// <param name="channel">target channel</param>
+    /// <param name="channels">list of target channels</param>
     /// <param name="messageId">discord message ID</param>
     /// <returns>bool whether the message exists</returns>
-    private static async Task<bool> MessageExistsAsync(DiscordChannel channel, ulong messageId)
+    private static async Task<bool> MessageExistsAsync(List<DiscordChannel> channels, ulong messageId)
     {
-        try
+        foreach (var channel in channels)
         {
-            var msg = await channel.GetMessageAsync(messageId);
-            return msg != null;
+            try
+            {
+                var msg = await channel.GetMessageAsync(messageId);
+                return msg != null;
+            }
+            catch (DSharpPlus.Exceptions.NotFoundException)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext("Message not found", OutputType.Warning);
+                return false;
+            }
         }
-        catch (DSharpPlus.Exceptions.NotFoundException)
-        {
-            if (Program.Config.Debug)
-                WriteLineWithPretext("Message not found", OutputType.Warning);
-            return false;
-        }
+
+        return false;
     }
     
     /// <summary>
