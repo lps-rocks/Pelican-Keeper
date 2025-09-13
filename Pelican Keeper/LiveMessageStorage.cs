@@ -150,7 +150,7 @@ public static class LiveMessageStorage
     /// <param name="channels">list of target channels</param>
     /// <param name="messageId">discord message ID</param>
     /// <returns>bool whether the message exists</returns>
-    private static async Task<bool> MessageExistsAsync(List<DiscordChannel> channels, ulong messageId)
+    public static async Task<bool> MessageExistsAsync(List<DiscordChannel> channels, ulong messageId)
     {
         foreach (var channel in channels)
         {

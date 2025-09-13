@@ -67,8 +67,7 @@ public static class HelperClass
                 return $"{allocation.Ip}:{allocation.Port}";
             }
         }
-
-        ConsoleExt.WriteLineWithPretext($"External IP: {Program.Secrets.ExternalServerIp}");
+        
         return $"{Program.Secrets.ExternalServerIp}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
     }
     
@@ -174,5 +173,125 @@ public static class HelperClass
             }
         }
         return serverResponse;
+    }
+    
+    public static IEnumerable<List<T>> Chunk<T>(IEnumerable<T> source, int size)
+    {
+        var list = new List<T>(size);
+        foreach (var item in source)
+        {
+            list.Add(item);
+            if (list.Count == size)
+            {
+                yield return list;
+                list.Clear();
+            }
+        }
+        if (list.Count > 0) yield return list;
+    }
+    
+    public static void AddRows(this DiscordMessageBuilder mb, IEnumerable<DiscordComponent> components, int maxRows = 5)
+    {
+        var rowsUsed = 0;
+        var buttonBuffer = new List<DiscordComponent>(capacity: 5);
+
+        void FlushButtons()
+        {
+            if (buttonBuffer.Count == 0) return;
+            // pack buttons in rows of up to 5
+            foreach (var chunk in buttonBuffer.Chunk(5))
+            {
+                if (rowsUsed >= maxRows) return;
+                mb.AddComponents(chunk);
+                rowsUsed++;
+            }
+            buttonBuffer.Clear();
+        }
+
+        foreach (var comp in components)
+        {
+            switch (comp)
+            {
+                case DiscordSelectComponent select:
+                    // close out any pending buttons first
+                    FlushButtons();
+                    if (rowsUsed >= maxRows) return;
+                    // a select must be the only item in its row
+                    mb.AddComponents(select);
+                    rowsUsed++;
+                    break;
+
+                default:
+                    // treat everything else as a button-like component
+                    buttonBuffer.Add(comp);
+                    // if we’ve accumulated 5, flush a row
+                    if (buttonBuffer.Count == 5)
+                        FlushButtons();
+                    break;
+            }
+
+            if (rowsUsed >= maxRows) break;
+        }
+
+        // flush any remaining buttons at the end
+        if (rowsUsed < maxRows)
+            FlushButtons();
+    }
+    
+    public static void DebugDumpComponents(IEnumerable<DiscordComponent> comps)
+    {
+        int rows = 0, total = 0;
+        int rowCount = 0;
+        var buffer = new List<DiscordComponent>(5);
+
+        void FlushButtons()
+        {
+            if (buffer.Count == 0) return;
+            rows++;
+            Console.WriteLine($"[ROW {rows}] {buffer.Count} button(s)");
+            foreach (var b in buffer)
+            {
+                if (b is DiscordButtonComponent btn)
+                {
+                    Console.WriteLine($"  • Button: style={btn.Style}, label='{btn.Label}' len={btn.Label?.Length ?? 0}, custom_id='{btn.CustomId}' len={btn.CustomId?.Length ?? 0}, type='{btn.Type}'");
+                    total++;
+                }
+            }
+            buffer.Clear();
+        }
+
+        foreach (var c in comps)
+        {
+            switch (c)
+            {
+                case DiscordSelectComponent s:
+                    // Buttons row before a select
+                    FlushButtons();
+                    rows++;
+                    Console.WriteLine($"[ROW {rows}] 1 select: custom_id='{s.CustomId}', placeholder='{s.Placeholder}' len={s.Placeholder?.Length ?? 0}, options={s.Options?.Count}");
+                    if (s.Options != null)
+                    {
+                        for (int i = 0; i < s.Options.Count; i++)
+                        {
+                            var o = s.Options[i];
+                            Console.WriteLine($"    - opt[{i}]: label='{o.Label}' len={o.Label.Length}, value='{o.Value}' len={o.Value.Length}, desc len={o.Description?.Length ?? 0}");
+                            total++;
+                        }
+                    }
+                    break;
+
+                case DiscordButtonComponent b:
+                    buffer.Add(b);
+                    if (buffer.Count == 5) FlushButtons();
+                    break;
+
+                default:
+                    Console.WriteLine($"[WARN] Unknown component type: {c.GetType().Name}");
+                    break;
+            }
+            rowCount++;
+        }
+        FlushButtons();
+        Console.WriteLine($"[SUMMARY] rows={rows}, total components={total}");
     }
 }

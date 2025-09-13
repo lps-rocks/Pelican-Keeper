@@ -71,6 +71,7 @@ public static class FileManager
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and is in the correct format. Check Secrets.json", OutputType.Error, ex);
+            Environment.Exit(0);
             return null;
         }
 
@@ -96,12 +97,14 @@ public static class FileManager
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load config. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
+            Environment.Exit(0);
             return null;
         }
         
         if (config == null)
         {
             WriteLineWithPretext("Config file is empty or not in the correct format. Please check Config.json", OutputType.Error);
+            Environment.Exit(0);
             return null;
         }
         
