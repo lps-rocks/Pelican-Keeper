@@ -31,7 +31,7 @@ public abstract class TemplateClasses
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum CommandExecutionMethod
     {
-        PelicanApi, //Thinking about adding the minecraft protocol as well
+        Minecraft,
         Rcon,
         A2S
     }

@@ -288,7 +288,6 @@ public static class HelperClass
     public static void DebugDumpComponents(IEnumerable<DiscordComponent> comps)
     {
         int rows = 0, total = 0;
-        int rowCount = 0;
         var buffer = new List<DiscordComponent>(5);
 
         void FlushButtons()
@@ -336,7 +335,6 @@ public static class HelperClass
                     Console.WriteLine($"[WARN] Unknown component type: {c.GetType().Name}");
                     break;
             }
-            rowCount++;
         }
         FlushButtons();
         Console.WriteLine($"[SUMMARY] rows={rows}, total components={total}");

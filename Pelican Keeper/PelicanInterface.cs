@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using Pelican_Keeper.Query_Services;
 using RestSharp;
 
 namespace Pelican_Keeper;
@@ -252,36 +253,6 @@ public static class PelicanInterface
         
         GetServerAllocations(servers);
     }
-    
-    [Obsolete("This doesn't return anything, because this API endpoint is not designed for any returns. This will be replaced by the minecraft specific Game communication")]
-    private static string? SendGameServerCommand(string? uuid, string command)
-    {
-        if (string.IsNullOrWhiteSpace(uuid))
-        {
-            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
-            return null;
-        }
-        
-        if (string.IsNullOrWhiteSpace(command))
-        {
-            ConsoleExt.WriteLineWithPretext("Command is null or empty.", ConsoleExt.OutputType.Error);
-            return null;
-        }
-        
-        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/");
-        var request = new RestRequest($"{uuid}/command", Method.Post);
-        
-        request.AddHeader("Authorization", $"Bearer {Program.Secrets.ClientToken}");
-        request.AddHeader("Content-Type", "application/json");
-
-        var body = new { command = $"{command}" };
-        request.AddStringBody(JsonSerializer.Serialize(body), ContentType.Json);
-
-        var response = client.Execute(request);
-        if (Program.Config.Debug)
-            ConsoleExt.WriteLineWithPretext(response.Content);
-        return response.Content;
-    }
 
     /// <summary>
     /// Sends a Power command to the specified Server.
@@ -430,12 +401,18 @@ public static class PelicanInterface
                 
                 break;
             }
-            case CommandExecutionMethod.PelicanApi:
+            case CommandExecutionMethod.Minecraft:
             {
-                if (serverToMonitor.Command != null)
+                if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null && serverInfo.Allocations != null)
                 {
-                    var pelicanResponse = SendGameServerCommand(serverInfo.Uuid, serverToMonitor.Command);
-                    serverInfo.PlayerCountText = pelicanResponse ?? "Command sent via Pelican API.";
+                    ServerAllocation? allocation = serverInfo.Allocations.Find(x => x.IsDefault);
+                    if (allocation == null)
+                    {
+                        ConsoleExt.WriteLineWithPretext($"Minecraft Protocol: No Allocation found for Server: {serverInfo.Name}!", ConsoleExt.OutputType.Error);
+                        break;
+                    }
+                    var pelicanResponse = MinecraftQueryService.GetPlayerCountsAsync(Program.Secrets.ExternalServerIp, allocation.Port).GetAwaiter().GetResult();
+                    serverInfo.PlayerCountText = pelicanResponse;
                 }
                 
                 break;

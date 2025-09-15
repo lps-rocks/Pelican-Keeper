@@ -1,7 +1,7 @@
 ﻿using System.Net.Sockets;
 using System.Text;
 
-namespace Pelican_Keeper;
+namespace Pelican_Keeper.Query_Services;
 
 public class RconService(string ip, int port, string password) : ISendCommand, IDisposable
 {

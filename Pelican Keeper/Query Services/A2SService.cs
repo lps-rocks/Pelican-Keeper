@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 
-namespace Pelican_Keeper;
+namespace Pelican_Keeper.Query_Services;
 
 public class A2SService(string ip, int port) : ISendCommand, IDisposable
 {
@@ -23,13 +23,11 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
     {
         if (_udpClient == null || _endPoint == null)
             throw new InvalidOperationException("Call Connect() before sending commands.");
-
-        // 1) Send initial A2S_INFO
+        
         var request = BuildA2SInfoPacket();
         await _udpClient.SendAsync(request, request.Length, _endPoint);
         ConsoleExt.WriteLineWithPretext("Sent A2S_INFO request");
-
-        // 2) Receive first response (could be info or challenge)
+        
         var first = await ReceiveWithTimeoutAsync(_udpClient, timeoutMs: 15000);
         if (first == null)
         {
@@ -51,17 +49,15 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
             // 0x41 = 'A' = S2C_CHALLENGE
             if (header == 0x41 && first.Length >= 9)
             {
-                // bytes 5..8 are the challenge (little endian)
+                // bytes 5 to 8 are the challenge
                 int challenge = BitConverter.ToInt32(first, 5);
                 if (Program.Config.Debug)
                     ConsoleExt.WriteLineWithPretext($"Received challenge: 0x{challenge:X8}");
-
-                // 3) Resend A2S_INFO including challenge
+                
                 var challenged = BuildA2SInfoPacket(challenge);
                 await _udpClient.SendAsync(challenged, challenged.Length, _endPoint);
                 ConsoleExt.WriteLineWithPretext("Sent A2S_INFO request with challenge");
-
-                // 4) Receive the actual info response
+                
                 var second = await ReceiveWithTimeoutAsync(_udpClient, timeoutMs: 15000);
                 if (second == null)
                 {
@@ -83,7 +79,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
                 return ParseOrFail(first);
             }
 
-            // Some servers may reply multi-packet (0xFE) or other types; for simplicity, treat as unsupported here
+            // Some servers may reply multi-packet (0xFE) or other types, but I will treat them as unsupported for now
             if (Program.Config.Debug)
                 ConsoleExt.WriteLineWithPretext($"Unexpected response header: 0x{header:X2}", ConsoleExt.OutputType.Warning);
         }
@@ -178,7 +174,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         if (index + 3 > buffer.Length) return string.Empty;
         byte players = buffer[index++];
         byte maxPlayers = buffer[index++];
-        byte bots = buffer[index++]; // advance!
+        byte bots = buffer[index];
 
         if (Program.Config.Debug)
         {
