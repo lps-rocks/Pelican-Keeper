@@ -17,7 +17,7 @@ public static class FileManager
         {
             return path;
         }
-        return File.Exists(Path.Combine("/Pelican Keeper/",path)) ? Path.Combine("/Pelican Keeper/",path) : string.Empty;
+        return File.Exists(Path.Combine(Environment.CurrentDirectory, "Pelican Keeper", path)) ? Path.Combine(Environment.CurrentDirectory, "Pelican Keeper", path) : string.Empty;
     }
 
     /// <summary>
@@ -44,6 +44,9 @@ public static class FileManager
         await writer.WriteAsync(defaultConfig);
     }
 
+    /// <summary>
+    /// Creates a default MessageMarkdown.txt file in the current execution directory.
+    /// </summary>
     public static async Task CreateMessageMarkdownFile()
     {
         await using var messageMarkdownFile = File.Create("MessageMarkdown.txt");
@@ -52,6 +55,10 @@ public static class FileManager
         await writer.WriteAsync(defaultConfig);
     }
     
+    /// <summary>
+    /// Reads the Secrets.json file and interprets it to the Secrets class structure.
+    /// </summary>
+    /// <returns>The interpreted Secrets in the Secrets class structure</returns>
     public static async Task<TemplateClasses.Secrets?> ReadSecretsFile()
     {
         string secretsPath = GetFilePath("Secrets.json");
@@ -79,6 +86,10 @@ public static class FileManager
         return secrets;
     }
     
+    /// <summary>
+    /// Reads the Config.json file and interprets it to the Config class structure.
+    /// </summary>
+    /// <returns>The interpreted Config in the Config class structure</returns>
     public static async Task<TemplateClasses.Config?> ReadConfigFile()
     {
         string configPath = GetFilePath("Config.json");
@@ -112,13 +123,17 @@ public static class FileManager
         return config;
     }
     
+    /// <summary>
+    /// Reads the GamesToMonitor.json file and interprets it to the GamesToMonitor class structure.
+    /// </summary>
+    /// <returns>The interpreted GamesToMonitor in the GamesToMonitor class structure</returns>
     public static async Task<List<TemplateClasses.GamesToMonitor>?> ReadGamesToMonitorFile()
     {
         string gameCommPath = GetFilePath("GamesToMonitor.json");
         
         if (gameCommPath == String.Empty)
         {
-            WriteLineWithPretext("GamesToMonitor.json not found. Creating default one.", OutputType.Error);//TODO: Add default creation of GamesToMonitor.json
+            WriteLineWithPretext("GamesToMonitor.json not found. Move it to the Main Directory for the bot to find it.", OutputType.Error);
             return null;
         }
 

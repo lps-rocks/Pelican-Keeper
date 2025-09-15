@@ -14,6 +14,9 @@ public static class PelicanInterface
     private static List<RconService> _rconServices = new();
     private static Dictionary<string, DateTime> _shutdownTracker = new();
 
+    /// <summary>
+    /// Gets the entire List of Eggs from the Pelican API
+    /// </summary>
     private static void GetEggList()
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/application/eggs");
@@ -70,6 +73,10 @@ public static class PelicanInterface
         }
     }
 
+    /// <summary>
+    /// Gets the Client Server List from the Pelican API, and gets the Network Allocations, and tracks the server for player count and automatic shutdown.
+    /// </summary>
+    /// <param name="serverInfos">List of ServerInfo</param>
     private static void GetServerAllocations(List<ServerInfo> serverInfos)
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/?type=admin-all");
@@ -246,7 +253,8 @@ public static class PelicanInterface
         GetServerAllocations(servers);
     }
     
-    private static string? SendGameServerCommand(string? uuid, string command) //TODO: I need to figure out a way to extract to the current player count and the maximum player count out of the return string where the max player count can be optional
+    [Obsolete("This doesn't return anything, because this API endpoint is not designed for any returns. This will be replaced by the minecraft specific Game communication")]
+    private static string? SendGameServerCommand(string? uuid, string command)
     {
         if (string.IsNullOrWhiteSpace(uuid))
         {
@@ -275,6 +283,11 @@ public static class PelicanInterface
         return response.Content;
     }
 
+    /// <summary>
+    /// Sends a Power command to the specified Server.
+    /// </summary>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="command">Command to send ("start", "stop", etc.)</param>
     public static void SendPowerCommand(string? uuid, string command)
     {
         if (string.IsNullOrWhiteSpace(uuid))
@@ -303,6 +316,14 @@ public static class PelicanInterface
             ConsoleExt.WriteLineWithPretext(response.Content);
     }
     
+    /// <summary>
+    /// Sends a RCON Server command to the Specified IP and Port
+    /// </summary>
+    /// <param name="ip">IP of the Server</param>
+    /// <param name="port">Port of the Server</param>
+    /// <param name="password">RCON Password of the Server</param>
+    /// <param name="command">Game command to send</param>
+    /// <returns>The response to the command that was sent</returns>
     // TODO: Generalize the connection protocol calls so I don't have to have separate methods for RCON and A2S and i can just generalize it with the ISendCommand interface.
     public static async Task<string?> SendGameServerCommandRcon(string ip, int port, string password, string command)
     {
@@ -327,6 +348,12 @@ public static class PelicanInterface
         return response;
     }
 
+    /// <summary>
+    /// Sends a A2S(Steam Query) request to the specified IP and Port
+    /// </summary>
+    /// <param name="ip">IP of the Server</param>
+    /// <param name="port">Port of the Server</param>
+    /// <returns>The Response to the command that was sent</returns>
     public static async Task<string?> SendA2SRequest(string ip, int port)
     {
         A2SService a2S = new A2SService(ip, port);
@@ -337,6 +364,11 @@ public static class PelicanInterface
         return response;
     }
 
+    /// <summary>
+    /// Monitors a specified Server and getting the Player count, Max player count, and put that into a neat text
+    /// </summary>
+    /// <param name="serverInfo">The ServerInfo of the specific server</param>
+    /// <param name="json">Input JSON</param>
     private static void MonitorServers(ServerInfo serverInfo, string json)
     {
         if (_gamesToMonitor == null || _gamesToMonitor.Count == 0) return;
@@ -355,7 +387,7 @@ public static class PelicanInterface
 
         if (serverInfo.PlayerCountText != null)
         {
-            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, maxPlayers);
         }
         switch (serverToMonitor.Protocol)
         {
@@ -374,7 +406,7 @@ public static class PelicanInterface
                 {
                     ConsoleExt.WriteLineWithPretext("Sending A2S request to " + Program.Secrets.ExternalServerIp + ":" + queryPort + " for server " + serverInfo.Name);
                     var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse ?? "No response from A2S query.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse ?? "No response from A2S query.", serverToMonitor.PlayerCountExtractRegex, maxPlayers);
                 }
 
                 return;
@@ -393,7 +425,7 @@ public static class PelicanInterface
                 if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null)
                 {
                     var rconResponse = SendGameServerCommandRcon(Program.Secrets.ExternalServerIp, rconPort, rconPassword, serverToMonitor.Command).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse ?? "No response from RCON command.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse ?? "No response from RCON command.", serverToMonitor.PlayerCountExtractRegex, maxPlayers);
                 }
                 
                 break;
@@ -411,7 +443,10 @@ public static class PelicanInterface
         }
     }
     
-    public static void GetServersToMonitorFileAsync()
+    /// <summary>
+    /// Runs a Task to continuously get the GamesToMonitor File if continuous reading is enabled.
+    /// </summary>
+    public static void GetGamesToMonitorFileAsync()
     {
         Task.Run(async () =>
         {

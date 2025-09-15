@@ -42,7 +42,7 @@ internal static class Program
             _ = FileManager.CreateMessageMarkdownFile();
         }
 
-        GetServersToMonitorFileAsync();
+        GetGamesToMonitorFileAsync();
         ServerMarkdown.GetMarkdownFileContentAsync();
 
         var discord = new DiscordClient(new DiscordConfiguration

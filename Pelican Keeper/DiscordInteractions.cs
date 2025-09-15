@@ -136,12 +136,18 @@ public class DiscordInteractions
         return Task.CompletedTask;
     }
     
+    /// <summary>
+    /// Function that is called when the user interacts with the Start Button. It sends a start command to the Server in question
+    /// </summary>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">MessageDeleteEventArgs</param>
+    /// <returns>Task of Type Task</returns>
     internal static async Task<Task> OnServerStartInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (e.User.IsBot)
         {
             if (Config.Debug)
-                WriteLineWithPretext("User is a Bot!", ConsoleExt.OutputType.Warning);
+                WriteLineWithPretext("User is a Bot!", OutputType.Warning);
             return Task.CompletedTask;
         }
 
@@ -158,7 +164,7 @@ public class DiscordInteractions
         if (server == null)
         {
             if (Config.Debug)
-                WriteLineWithPretext($"No server found with UUID {id}", ConsoleExt.OutputType.Warning);
+                WriteLineWithPretext($"No server found with UUID {id}", OutputType.Warning);
             return Task.CompletedTask;
         }
 
@@ -172,12 +178,18 @@ public class DiscordInteractions
         return Task.CompletedTask;
     }
     
+    /// <summary>
+    /// Function that is called when the user interacts with the Stop Button. It sends a stop command to the Server in question
+    /// </summary>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">MessageDeleteEventArgs</param>
+    /// <returns>Task of Type Task</returns>
     internal static async Task<Task> OnServerStopInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (e.User.IsBot)
         {
             if (Config.Debug)
-                WriteLineWithPretext("User is a Bot!", ConsoleExt.OutputType.Warning);
+                WriteLineWithPretext("User is a Bot!", OutputType.Warning);
             return Task.CompletedTask;
         }
         
@@ -194,7 +206,7 @@ public class DiscordInteractions
         if (server == null)
         {
             if (Config.Debug)
-                WriteLineWithPretext($"No server found with UUID {id}", ConsoleExt.OutputType.Warning);
+                WriteLineWithPretext($"No server found with UUID {id}", OutputType.Warning);
             return Task.CompletedTask;
         }
 
@@ -208,6 +220,12 @@ public class DiscordInteractions
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Function that is called when the user interacts with the dropdown menu. It starts or stops the server you selected
+    /// </summary>
+    /// <param name="sender">DiscordClient</param>
+    /// <param name="e">MessageDeleteEventArgs</param>
+    /// <returns>Task of Type Task</returns>
     internal static async Task<Task> OnDropDownInteration(DiscordClient sender, ComponentInteractionCreateEventArgs e)
     {
         if (e.User.IsBot) return Task.CompletedTask;

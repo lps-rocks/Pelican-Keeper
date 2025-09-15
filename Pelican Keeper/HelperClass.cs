@@ -43,6 +43,11 @@ public static class HelperClass
         return true;
     }
 
+    /// <summary>
+    /// Gets the Main connectable IP and Port by checking if the allocation is set as the default.
+    /// </summary>
+    /// <param name="serverInfo">ServerInfo of the server</param>
+    /// <returns>The allocation that's marked as the default</returns>
     private static ServerAllocation? GetConnectableAllocation(ServerInfo serverInfo) //TODO: I need more logic here to determine the best allocation to use and to determine the right port if the main port is not he joining port, for example in ark se its the query port
     {
         if (serverInfo.Allocations == null || serverInfo.Allocations.Count == 0)
@@ -50,7 +55,12 @@ public static class HelperClass
         return serverInfo.Allocations?.FirstOrDefault(allocation => allocation.IsDefault) ?? serverInfo.Allocations?.FirstOrDefault();
     }
     
-    public static string GetConnectableAddress(ServerInfo serverInfo)
+    /// <summary>
+    /// Puts the ServerAllocation of a ServerInfo into a readable string format for the end user
+    /// </summary>
+    /// <param name="serverInfo">ServerInfo of the server</param>
+    /// <returns>No Connectable Address if nothing is found, and Ip:Port if a match is found</returns>
+    public static string GetReadableConnectableAddress(ServerInfo serverInfo)
     {
         var allocation = GetConnectableAllocation(serverInfo);
         if (allocation == null)
@@ -71,9 +81,16 @@ public static class HelperClass
         return $"{Program.Secrets.ExternalServerIp}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
     }
     
-    public static List<ServerInfo> SortServers(IEnumerable<ServerInfo> servers, MessageSorting field, MessageSortingDirection direction)
+    /// <summary>
+    /// Sorts a list of ServerInfo's in the desired format and direction.
+    /// </summary>
+    /// <param name="servers">List of ServerInfos</param>
+    /// <param name="sortFormat">The Format the Servers should be sorted in</param>
+    /// <param name="direction">The direction the Servers should be sorted in</param>
+    /// <returns>The Sorted List of ServerInfo's</returns>
+    public static List<ServerInfo> SortServers(IEnumerable<ServerInfo> servers, MessageSorting sortFormat, MessageSortingDirection direction)
     {
-        return (field, direction) switch
+        return (field: sortFormat, direction) switch
         {
             (MessageSorting.Name, MessageSortingDirection.Ascending) => servers.OrderBy(s => s.Name).ToList(),
             (MessageSorting.Name, MessageSortingDirection.Descending) => servers.OrderByDescending(s => s.Name).ToList(),
@@ -85,10 +102,17 @@ public static class HelperClass
         };
     }
 
+    /// <summary>
+    /// Extracts the Player count for a server depending on its response.
+    /// </summary>
+    /// <param name="serverResponse">The Servers Response</param>
+    /// <param name="regexPattern">Custom Regex Pattern provided by the user</param>
+    /// <returns>An int of the Player count, and 0 if nothing is found</returns>
     public static int ExtractPlayerCount(string? serverResponse, string? regexPattern)
     {
         if (string.IsNullOrEmpty(serverResponse))
         {
+            ConsoleExt.WriteLineWithPretext("The Response of the Server was Empty or Null!", ConsoleExt.OutputType.Error);
             return 0;
         }
 
@@ -122,32 +146,38 @@ public static class HelperClass
             }
         }
         
+        ConsoleExt.WriteLineWithPretext("The Bot was unable to determine the Player Count of the Server!", ConsoleExt.OutputType.Error);
         return 0;
     }
 
-    public static string ServerPlayerCountDisplayCleanup(string? serverResponse, string? regexPattern, string? maxPlayers = "Unknown")
+    /// <summary>
+    /// Cleans up the Server response into a clean and readable end user display string.
+    /// </summary>
+    /// <param name="serverResponse">The Server response</param>
+    /// <param name="regexPattern">Custom Regex Pattern provided by the user</param>
+    /// <param name="maxPlayers">Optional! A hard-coded string if left empty for the max number the server can have</param>
+    /// <returns>A User readable string of the player count</returns>
+    public static string ServerPlayerCountDisplayCleanup(string? serverResponse, string? regexPattern, int maxPlayers = 0)
     {
-        if (serverResponse is "No response from RCON command." or "Command sent via Pelican API." or "No response from A2S query." && !string.IsNullOrEmpty(maxPlayers) && maxPlayers != "Unknown")
+        string maxPlayerCount = "Unknown";
+        
+        if (serverResponse is "No response from RCON command." or "Command sent via Pelican API." or "No response from A2S query." && maxPlayers > 0 || (string.IsNullOrEmpty(serverResponse) && maxPlayers > 0))
         {
             return $"N/A/{maxPlayers}";
         }
         
         if (string.IsNullOrEmpty(serverResponse))
         {
-            if (!string.IsNullOrEmpty(maxPlayers) && maxPlayers != "Unknown")
-            {
-                return $"N/A/{maxPlayers}";
-            }
             return "N/A";
         }
 
-        if (maxPlayers == "0")
+        if (maxPlayers != 0)
         {
-            maxPlayers = "Unknown";
+            maxPlayerCount = maxPlayers.ToString();
         }
         
         var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo\s+Players?\b[.!]?");
-        if (noPlayer.Success) return $"0/{maxPlayers}";
+        if (noPlayer.Success) return $"0/{maxPlayerCount}";
         
         var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
         if (playerMaxPlayer.Success)
@@ -155,12 +185,12 @@ public static class HelperClass
         
         var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
         if (arkRconPlayerList.Success)
-            return $"{arkRconPlayerList.Length}/{maxPlayers}";
+            return $"{arkRconPlayerList.Length}/{maxPlayerCount}";
         
         var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
         if (palworldPlayerList.Success || serverResponse.Contains("name,playeruid,steamid"))
         {
-            return $"{palworldPlayerList.Length}/{maxPlayers}";
+            return $"{palworldPlayerList.Length}/{maxPlayerCount}";
         }
         
         // Custom User-defined regex pattern
@@ -169,12 +199,19 @@ public static class HelperClass
             var customMatch = Regex.Match(serverResponse, regexPattern);
             if (customMatch.Success)
             {
-                return $"{customMatch}/{maxPlayers}";
+                return $"{customMatch}/{maxPlayerCount}";
             }
         }
         return serverResponse;
     }
     
+    /// <summary>
+    /// Chunks any list of items into multiple lists with the desired size
+    /// </summary>
+    /// <param name="source">Source List</param>
+    /// <param name="size">Maximum size you want the output lists to be</param>
+    /// <typeparam name="T">Any Type</typeparam>
+    /// <returns>A List of Lists with the original items being chunked</returns>
     public static IEnumerable<List<T>> Chunk<T>(IEnumerable<T> source, int size)
     {
         var list = new List<T>(size);
@@ -190,6 +227,12 @@ public static class HelperClass
         if (list.Count > 0) yield return list;
     }
     
+    /// <summary>
+    /// Puts a list of DiscordComponent's each into one line
+    /// </summary>
+    /// <param name="mb">DiscordMessageBuilder</param>
+    /// <param name="components">List of DiscordComponent's</param>
+    /// <param name="maxRows">Maximum number of rows you allow, Default 5</param>
     public static void AddRows(this DiscordMessageBuilder mb, IEnumerable<DiscordComponent> components, int maxRows = 5)
     {
         var rowsUsed = 0;
@@ -238,6 +281,10 @@ public static class HelperClass
             FlushButtons();
     }
     
+    /// <summary>
+    /// A Console Dump for a list of DiscordComponent's and their contents
+    /// </summary>
+    /// <param name="comps">List of DiscordComponent's</param>
     public static void DebugDumpComponents(IEnumerable<DiscordComponent> comps)
     {
         int rows = 0, total = 0;

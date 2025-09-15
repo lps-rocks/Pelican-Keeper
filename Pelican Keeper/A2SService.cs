@@ -127,8 +127,10 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
     }
 
     /// <summary>
-    /// A2S_INFO request: 0xFF 0xFF 0xFF 0xFF 'T' "Source Engine Query\0" [optional 4-byte challenge LE]
+    /// Builds the A2S info packet with an optional challenge response.
     /// </summary>
+    /// <param name="challenge">The Solved Challenge</param>
+    /// <returns>Built A2S info Packet</returns>
     private static byte[] BuildA2SInfoPacket(int? challenge = null)
     {
         var head = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, (byte)'T' };
@@ -144,8 +146,10 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
     }
 
     /// <summary>
-    /// Parses S2A_INFO (0x49) response. Returns "players/maxPlayers" or empty on failure.
+    /// Parses the A2S response.
     /// </summary>
+    /// <param name="buffer">The Response</param>
+    /// <returns>"players/maxPlayers" or empty on failure.</returns>
     private static string ParseA2SInfoResponse(byte[] buffer)
     {
         // Need at least header + 1 type byte
