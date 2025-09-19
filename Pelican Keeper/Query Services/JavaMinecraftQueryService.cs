@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace Pelican_Keeper.Query_Services;
 
-public static class MinecraftQueryService
+public static class JavaMinecraftQueryService //TODO: This should inherit from the ISendCommand Interface
 {
     /// <summary>
     /// Queries a Minecraft server (Java edition) for current/maximum players using the status protocol.
@@ -19,54 +19,69 @@ public static class MinecraftQueryService
     public static async Task<string> GetPlayerCountsAsync(string host, int port = 25565, int timeoutMs = 5000, int protocolVersion = 760)
     {
         using var cts = new CancellationTokenSource(timeoutMs);
-        using var client = new TcpClient();
-        await client.ConnectAsync(host, port, cts.Token);
-        await using var stream = client.GetStream();
-        
-        using (var ms = new MemoryStream())
+        try
         {
-            WriteVarInt(ms, 0x00);                              // packet id
-            WriteVarInt(ms, protocolVersion);                   // protocol version (ignored for status, but still has to be included)
-            WriteString(ms, host);                              // server address
-            WriteUShort(ms, (ushort)port);                      // server port
-            WriteVarInt(ms, 0x01);                              // next state = status
-            await SendFramedAsync(stream, ms.ToArray(), cts.Token);
+            using var client = new TcpClient();
+            await client.ConnectAsync(host, port, cts.Token);
+            await using var stream = client.GetStream();
+
+            using (var ms = new MemoryStream())
+            {
+                WriteVarInt(ms, 0x00); // packet id
+                WriteVarInt(ms, protocolVersion); // protocol version (ignored for status, but still has to be included)
+                WriteString(ms, host); // server address
+                WriteUShort(ms, (ushort)port); // server port
+                WriteVarInt(ms, 0x01); // next state = status
+                await SendFramedAsync(stream, ms.ToArray(), cts.Token);
+            }
+
+            await SendFramedAsync(stream, [0x00], cts.Token);
+
+            var payload = await ReadPacketAsync(stream, cts.Token);
+            using var rms = new MemoryStream(payload);
+
+            var packetId = ReadVarInt(rms);
+            if (packetId != 0x00) throw new InvalidDataException($"Unexpected packet id {packetId}.");
+
+            var jsonLen = ReadVarInt(rms);
+            var jsonBuf = new byte[jsonLen];
+            if (await rms.ReadAsync(jsonBuf, 0, jsonLen, cts.Token) != jsonLen) throw new EndOfStreamException();
+
+            var json = Encoding.UTF8.GetString(jsonBuf);
+
+            using var doc = JsonDocument.Parse(json);
+            var players = doc.RootElement.GetProperty("players");
+            int online = players.GetProperty("online").GetInt32();
+            int max = players.GetProperty("max").GetInt32();
+
+            return $"{online}/{max}";
         }
-        
-        await SendFramedAsync(stream, [0x00], cts.Token);
-        
-        var payload = await ReadPacketAsync(stream, cts.Token);
-        using var rms = new MemoryStream(payload);
-        
-        var packetId = ReadVarInt(rms);
-        if (packetId != 0x00) throw new InvalidDataException($"Unexpected packet id {packetId}.");
-
-        var jsonLen = ReadVarInt(rms);
-        var jsonBuf = new byte[jsonLen];
-        if (await rms.ReadAsync(jsonBuf, 0, jsonLen, cts.Token) != jsonLen) throw new EndOfStreamException();
-
-        var json = Encoding.UTF8.GetString(jsonBuf);
-
-        using var doc = JsonDocument.Parse(json);
-        var players = doc.RootElement.GetProperty("players");
-        int online = players.GetProperty("online").GetInt32();
-        int max    = players.GetProperty("max").GetInt32();
-        
-        return $"{online}/{max}";
+        catch (OperationCanceledException)
+        {
+            return "Timed out waiting for server response.";
+        }
+        catch (SocketException)
+        {
+            return "Could not connect to server.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error: {ex.Message}";
+        }
     }
 
-    static async Task SendFramedAsync(NetworkStream stream, byte[] payload, CancellationToken ct)
+    private static async Task SendFramedAsync(NetworkStream stream, byte[] payload, CancellationToken ct)
     {
         // Each MC packet is framed as: [VarInt length][payload]
         using var ms = new MemoryStream();
         WriteVarInt(ms, payload.Length);
         ms.Write(payload, 0, payload.Length);
         var buf = ms.ToArray();
-        await stream.WriteAsync(buf, 0, buf.Length, ct);
+        await stream.WriteAsync(buf, ct);
         await stream.FlushAsync(ct);
     }
 
-    static void WriteVarInt(Stream s, int value)
+    private static void WriteVarInt(Stream s, int value)
     {
         uint u = (uint)value;
         while (true)
@@ -77,21 +92,21 @@ public static class MinecraftQueryService
         }
     }
 
-    static void WriteUShort(Stream s, ushort v)
+    private static void WriteUShort(Stream s, ushort v)
     {
         Span<byte> tmp = stackalloc byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(tmp, v);
         s.Write(tmp);
     }
 
-    static void WriteString(Stream s, string str)
+    private static void WriteString(Stream s, string str)
     {
         var bytes = Encoding.UTF8.GetBytes(str);
         WriteVarInt(s, bytes.Length);
         s.Write(bytes, 0, bytes.Length);
     }
 
-    static async Task<int> ReadVarIntAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<int> ReadVarIntAsync(NetworkStream stream, CancellationToken ct)
     {
         int numRead = 0;
         int result = 0;
@@ -107,7 +122,7 @@ public static class MinecraftQueryService
         return result;
     }
     
-    static int ReadVarInt(Stream s)
+    private static int ReadVarInt(Stream s)
     {
         int numRead = 0, result = 0, read;
         do
@@ -121,7 +136,7 @@ public static class MinecraftQueryService
         return result;
     }
 
-    static async Task<byte[]> ReadExactAsync(NetworkStream stream, int len, CancellationToken ct)
+    private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int len, CancellationToken ct)
     {
         var buf = new byte[len];
         int off = 0;
@@ -134,13 +149,13 @@ public static class MinecraftQueryService
         return buf;
     }
     
-    static async Task<byte[]> ReadPacketAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<byte[]> ReadPacketAsync(NetworkStream stream, CancellationToken ct)
     {
         var length  = await ReadVarIntAsync(stream, ct);
         return await ReadExactAsync(stream, length, ct);
     }
 
-    static async Task<byte> ReadByteAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<byte> ReadByteAsync(NetworkStream stream, CancellationToken ct)
     {
         var buffer = new byte[1];
         int read = await stream.ReadAsync(buffer, 0, 1, ct);

@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Pelican_Keeper.Query_Services;
 using RestSharp;
 
@@ -202,6 +203,16 @@ public static class PelicanInterface
                     servers = servers.Where(s => s.Resources?.CurrentState.ToLower() != "offline" && s.Resources?.CurrentState.ToLower() != "missing").ToList();
                 }
                 
+                if (Program.Config.IgnoreInternalServers)
+                {
+                    if (Program.Config.InternalIpStructure != null)
+                    {
+                        string internalIpPattern = "^" + Regex.Escape(Program.Config.InternalIpStructure).Replace("\\*", "\\d+") + "$";
+                        servers = servers.Where(s => s.Allocations != null && s.Allocations.Any(a => Regex.IsMatch(a.Ip, internalIpPattern))).ToList();
+
+                    }
+                }
+                
                 if (Program.Config.LimitServerCount && Program.Config.MaxServerCount > 0)
                 {
                     if (Program.Config.ServersToDisplay != null && Program.Config.ServersToDisplay.Length > 0 && Program.Config.ServersToDisplay[0] != "UUIDS HERE")
@@ -376,7 +387,7 @@ public static class PelicanInterface
                 if (Program.Secrets.ExternalServerIp != null)
                 {
                     ConsoleExt.WriteLineWithPretext("Sending A2S request to " + Program.Secrets.ExternalServerIp + ":" + queryPort + " for server " + serverInfo.Name);
-                    var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort).GetAwaiter().GetResult();
+                    var a2SResponse = SendA2SRequest(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
                     serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse ?? "No response from A2S query.", serverToMonitor.PlayerCountExtractRegex, maxPlayers);
                 }
 
@@ -395,24 +406,60 @@ public static class PelicanInterface
                 
                 if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null)
                 {
-                    var rconResponse = SendGameServerCommandRcon(Program.Secrets.ExternalServerIp, rconPort, rconPassword, serverToMonitor.Command).GetAwaiter().GetResult();
+                    var rconResponse = SendGameServerCommandRcon(GetCorrectIp(serverInfo), rconPort, rconPassword, serverToMonitor.Command).GetAwaiter().GetResult();
                     serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse ?? "No response from RCON command.", serverToMonitor.PlayerCountExtractRegex, maxPlayers);
                 }
                 
                 break;
             }
-            case CommandExecutionMethod.Minecraft:
+            case CommandExecutionMethod.MinecraftJava:
             {
-                if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null && serverInfo.Allocations != null)
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverInfo.Uuid, serverToMonitor.QueryPortVariable);
+                
+                if (Program.Secrets.ExternalServerIp != null && queryPort != 0)
                 {
-                    ServerAllocation? allocation = serverInfo.Allocations.Find(x => x.IsDefault);
-                    if (allocation == null)
+                    var minecraftResponse = JavaMinecraftQueryService.GetPlayerCountsAsync(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
+                    if (Program.Config.Debug)
                     {
-                        ConsoleExt.WriteLineWithPretext($"Minecraft Protocol: No Allocation found for Server: {serverInfo.Name}!", ConsoleExt.OutputType.Error);
-                        break;
+                        ConsoleExt.WriteLineWithPretext($"Sent Java Minecraft Query to Serer and Port: {Program.Secrets.ExternalServerIp}:{queryPort}");
+                        ConsoleExt.WriteLineWithPretext($"Java Minecraft Response: {minecraftResponse}");
                     }
-                    var pelicanResponse = MinecraftQueryService.GetPlayerCountsAsync(Program.Secrets.ExternalServerIp, allocation.Port).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = pelicanResponse;
+                    serverInfo.PlayerCountText = minecraftResponse;
+                }
+                else
+                {
+                    if (Program.Config.Debug)
+                    {
+                        ConsoleExt.WriteLineWithPretext("Something went wrong when trying pre-check Information before sending it to the Java Minecraft Server!", ConsoleExt.OutputType.Warning);
+                        ConsoleExt.WriteLineWithPretext($"External IP Value: {Program.Secrets.ExternalServerIp}");
+                        ConsoleExt.WriteLineWithPretext($"Query Port Value: {queryPort}");
+                    }
+                }
+                
+                break;
+            }
+            case CommandExecutionMethod.MinecraftBedrock:
+            {
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverInfo.Uuid, serverToMonitor.QueryPortVariable);
+                
+                if (Program.Secrets.ExternalServerIp != null && queryPort != 0)
+                {
+                    var minecraftResponse = BedrockMinecraftQueryService.GetPlayerCountsAsync(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
+                    if (Program.Config.Debug)
+                    {
+                        ConsoleExt.WriteLineWithPretext($"Sent Bedrock Minecraft Query to Serer and Port: {Program.Secrets.ExternalServerIp}:{queryPort}");
+                        ConsoleExt.WriteLineWithPretext($"Bedrock Minecraft Response: {minecraftResponse}");
+                    }
+                    serverInfo.PlayerCountText = minecraftResponse;
+                }
+                else
+                {
+                    if (Program.Config.Debug)
+                    {
+                        ConsoleExt.WriteLineWithPretext("Something went wrong when trying pre-check Information before sending it to the Bedrock Minecraft Server!", ConsoleExt.OutputType.Warning);
+                        ConsoleExt.WriteLineWithPretext($"External IP Value: {Program.Secrets.ExternalServerIp}");
+                        ConsoleExt.WriteLineWithPretext($"Query Port Value: {queryPort}");
+                    }
                 }
                 
                 break;

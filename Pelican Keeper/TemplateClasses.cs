@@ -31,7 +31,8 @@ public abstract class TemplateClasses
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum CommandExecutionMethod
     {
-        Minecraft,
+        MinecraftJava,
+        MinecraftBedrock,
         Rcon,
         A2S
     }
@@ -53,6 +54,7 @@ public abstract class TemplateClasses
         public MessageSorting MessageSorting { get; init; }
         public MessageSortingDirection MessageSortingDirection { get; init; }
         public bool IgnoreOfflineServers { get; init; }
+        public bool IgnoreInternalServers { get; init; }
         public string[]? ServersToIgnore { get; init; }
         
         public bool JoinableIpDisplay { get; init; }

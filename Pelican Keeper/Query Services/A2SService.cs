@@ -76,7 +76,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
             // 0x49 = 'I' = S2A_INFO (immediate info response, no challenge)
             if (header == 0x49)
             {
-                return ParseOrFail(first);
+                return ParseOrFail(first); //TODO: Do the Player count text format correction here before returning instead of outside the function to streamline the process
             }
 
             // Some servers may reply multi-packet (0xFE) or other types, but I will treat them as unsupported for now

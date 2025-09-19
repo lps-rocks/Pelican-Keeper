@@ -54,6 +54,32 @@ public static class HelperClass
             ConsoleExt.WriteLineWithPretext("Empty allocations for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
         return serverInfo.Allocations?.FirstOrDefault(allocation => allocation.IsDefault) ?? serverInfo.Allocations?.FirstOrDefault();
     }
+ 
+    /// <summary>
+    /// Determines if the IP is Internal or External and returns the Internal one if it's Internal and the Secrets specified External one if it doesn't match the Internal structure.
+    /// </summary>
+    /// <param name="serverInfo">ServerInfo of the Server</param>
+    /// <returns>Internal or External IP</returns>
+    public static string GetCorrectIp(ServerInfo serverInfo)
+    {
+        var allocation = GetConnectableAllocation(serverInfo);
+        if (allocation == null)
+        {
+            ConsoleExt.WriteLineWithPretext("No connectable allocation found for server: " + serverInfo.Name, ConsoleExt.OutputType.Error);
+            return "No Connectable Address";
+        }
+        
+        if (Program.Config.InternalIpStructure != null)
+        {
+            string internalIpPattern = "^" + Regex.Escape(Program.Config.InternalIpStructure).Replace("\\*", "\\d+") + "$";
+            if (Regex.Match(allocation.Ip, internalIpPattern) is { Success: true })
+            {
+                return allocation.Ip;
+            }
+        }
+
+        return Program.Secrets.ExternalServerIp ?? "0.0.0.0";
+    }
     
     /// <summary>
     /// Puts the ServerAllocation of a ServerInfo into a readable string format for the end user
@@ -68,17 +94,8 @@ public static class HelperClass
             ConsoleExt.WriteLineWithPretext("No connectable allocation found for server: " + serverInfo.Name, ConsoleExt.OutputType.Error);
             return "No Connectable Address";
         }
-
-        if (Program.Config.InternalIpStructure != null)
-        {
-            string pattern = "^" + Regex.Escape(Program.Config.InternalIpStructure).Replace("\\*", "\\d+") + "$";
-            if (Program.Config.InternalIpStructure != null && Regex.Match(allocation.Ip, pattern) is { Success: true })
-            {
-                return $"{allocation.Ip}:{allocation.Port}";
-            }
-        }
         
-        return $"{Program.Secrets.ExternalServerIp}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
+        return $"{GetCorrectIp(serverInfo)}:{allocation.Port}"; //TODO: Allow for usage of domain names in the future
     }
     
     /// <summary>
@@ -256,18 +273,17 @@ public static class HelperClass
             switch (comp)
             {
                 case DiscordSelectComponent select:
-                    // close out any pending buttons first
                     FlushButtons();
                     if (rowsUsed >= maxRows) return;
-                    // a select must be the only item in its row
+                    // a select must be the only item in its row otherwise discord will freak out for some weird reason
                     mb.AddComponents(select);
                     rowsUsed++;
                     break;
 
                 default:
-                    // treat everything else as a button-like component
+                    // everything else gets treated as a button-like component
                     buttonBuffer.Add(comp);
-                    // if we’ve accumulated 5, flush a row
+                    // if it accumulated 5, it will flush a row
                     if (buttonBuffer.Count == 5)
                         FlushButtons();
                     break;

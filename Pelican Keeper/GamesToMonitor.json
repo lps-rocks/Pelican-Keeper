@@ -22,5 +22,15 @@
     "Game": "7 Days To Die",
     "Protocol": "A2S",
     "QueryPortVariable": "SERVER_PORT"
+  },
+  {
+    "Game": "Forge Minecraft",
+    "Protocol": "MinecraftJava",
+    "QueryPortVariable": "SERVER_PORT"
+  },
+  {
+    "Game": "NeoForge",
+    "Protocol": "MinecraftJava",
+    "QueryPortVariable": "SERVER_PORT"
   }
 ]

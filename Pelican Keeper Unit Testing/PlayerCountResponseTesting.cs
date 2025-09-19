@@ -49,9 +49,14 @@ public class PlayerCountResponseTesting
                     }
                     break;
                 }
-                case CommandExecutionMethod.Minecraft:
+                case CommandExecutionMethod.MinecraftJava:
                 {
-                    response = await MinecraftQueryService.GetPlayerCountsAsync(_ip, (int)_port);
+                    response = await JavaMinecraftQueryService.GetPlayerCountsAsync(_ip, (int)_port);
+                    break;
+                }
+                case CommandExecutionMethod.MinecraftBedrock:
+                {
+                    response = await BedrockMinecraftQueryService.GetPlayerCountsAsync(_ip, (int)_port);
                     break;
                 }
                 case null:

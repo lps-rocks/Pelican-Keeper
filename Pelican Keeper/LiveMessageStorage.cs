@@ -49,6 +49,10 @@ public static class LiveMessageStorage
         {
             var json = File.ReadAllText(HistoryFilePath);
             Cache = JsonSerializer.Deserialize<LiveMessageJsonStorage>(json) ?? new LiveMessageJsonStorage();
+            foreach (var liveStore in Cache.LiveStore)
+            {
+                WriteLineWithPretext($"Cache contents: {liveStore}");
+            }
         }
         catch (Exception ex)
         {
@@ -152,21 +156,34 @@ public static class LiveMessageStorage
     /// <returns>bool whether the message exists</returns>
     public static async Task<bool> MessageExistsAsync(List<DiscordChannel> channels, ulong messageId)
     {
+        if (channels is not { Count: > 0 }) return true;
+
         foreach (var channel in channels)
         {
             try
             {
                 var msg = await channel.GetMessageAsync(messageId);
-                return msg != null;
+                if (msg != null) return true;
             }
             catch (DSharpPlus.Exceptions.NotFoundException)
             {
                 if (Program.Config.Debug)
-                    WriteLineWithPretext("Message not found", OutputType.Warning);
-                return false;
+                    WriteLineWithPretext($"Message {messageId} not found in #{channel.Name}", OutputType.Warning);
+            }
+            catch (DSharpPlus.Exceptions.UnauthorizedException)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext($"No permission to read #{channel.Name}", OutputType.Warning);
+            }
+            catch (DSharpPlus.Exceptions.BadRequestException ex)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext($"Bad request on #{channel.Name}: {ex.Message}", OutputType.Warning);
             }
         }
-
+        
+        if (Program.Config.Debug)
+            WriteLineWithPretext($"Message {messageId} not found in any channel", OutputType.Error);
         return false;
     }
     
@@ -178,6 +195,6 @@ public static class LiveMessageStorage
     public static ulong? Get(ulong? messageId)
     {
         if (Cache?.LiveStore == null || Cache.LiveStore.Count == 0 || messageId == null) return null;
-        return Cache.LiveStore?.First(x => x == messageId);
+        return Cache.LiveStore?.FirstOrDefault(x => x == messageId);
     }
 }

@@ -3,6 +3,7 @@
 namespace Pelican_Keeper;
 
 using static ConsoleExt;
+using static TemplateClasses;
 
 public static class FileManager
 {
@@ -39,7 +40,7 @@ public static class FileManager
     private static async Task CreateConfigFile()
     {
         await using var configFile = File.Create("Config.json");
-        var defaultConfig = new string("{\n  \"InternalIpStructure\": \"192.168.*.*\",\n  \"MessageFormat\": \"Consolidated\",\n  \"MessageSorting\": \"Name\",\n  \"MessageSortingDirection\": \"Ascending\",\n  \"IgnoreOfflineServers\": false,\n  \"ServersToIgnore\": [\"UUIDS HERE\"],\n  \n  \"JoinableIpDisplay\": false,\n  \"PlayerCountDisplay\": false,\n  \"ServersToMonitor\": [\"UUIDS HERE\"],\n  \n  \"AutomaticShutdown\": true,\n  \"ServersToAutoShutdown\": [\"UUIDS HERE\"],\n  \"EmptyServerTimeout\": \"00:01:00\",\n  \"AllowUserServerStartup\": true,\n  \"AllowServerStartup\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStartServers\": [\"USERID HERE\"],\n  \"AllowUserServerStopping\": true,\n  \"AllowServerStopping\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStopServers\": [\"USERID HERE\"],\n  \n  \"ContinuesMarkdownRead\": true,\n  \"ContinuesGamesToMonitorRead\": true,\n  \"MarkdownUpdateInterval\": 30,\n  \"ServerUpdateInterval\": 10,\n  \n  \"LimitServerCount\": false,\n  \"MaxServerCount\": 10,\n  \"ServersToDisplay\": [\"UUIDS HERE\"],\n  \n  \"Debug\": true,\n  \"DryRun\": false\n}");
+        var defaultConfig = new string("{\n  \"InternalIpStructure\": \"192.168.*.*\",\n  \"MessageFormat\": \"Consolidated\",\n  \"MessageSorting\": \"Name\",\n  \"MessageSortingDirection\": \"Ascending\",\n  \"IgnoreOfflineServers\": false,\n  \"IgnoreInternalServers\": false,\n  \"ServersToIgnore\": [\"UUIDS HERE\"],\n  \n  \"JoinableIpDisplay\": true,\n  \"PlayerCountDisplay\": true,\n  \"ServersToMonitor\": [\"UUIDS HERE\"],\n  \n  \"AutomaticShutdown\": true,\n  \"ServersToAutoShutdown\": [\"UUIDS HERE\"],\n  \"EmptyServerTimeout\": \"00:01:00\",\n  \"AllowUserServerStartup\": true,\n  \"AllowServerStartup\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStartServers\": [\"USERID HERE\"],\n  \"AllowUserServerStopping\": true,\n  \"AllowServerStopping\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStopServers\": [\"USERID HERE\"],\n  \n  \"ContinuesMarkdownRead\": true,\n  \"ContinuesGamesToMonitorRead\": true,\n  \"MarkdownUpdateInterval\": 30,\n  \"ServerUpdateInterval\": 10,\n  \n  \"LimitServerCount\": false,\n  \"MaxServerCount\": 10,\n  \"ServersToDisplay\": [\"UUIDS HERE\"],\n  \n  \"Debug\": false,\n  \"DryRun\": false\n}");
         await using var writer = new StreamWriter(configFile);
         await writer.WriteAsync(defaultConfig);
     }
@@ -59,7 +60,7 @@ public static class FileManager
     /// Reads the Secrets.json file and interprets it to the Secrets class structure.
     /// </summary>
     /// <returns>The interpreted Secrets in the Secrets class structure</returns>
-    public static async Task<TemplateClasses.Secrets?> ReadSecretsFile()
+    public static async Task<Secrets?> ReadSecretsFile()
     {
         string secretsPath = GetFilePath("Secrets.json");
         
@@ -69,11 +70,11 @@ public static class FileManager
             return null;
         }
 
-        TemplateClasses.Secrets? secrets;
+        Secrets? secrets;
         try
         {
             var secretsJson = await File.ReadAllTextAsync(secretsPath);
-            secrets = JsonSerializer.Deserialize<TemplateClasses.Secrets>(secretsJson)!;
+            secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
         }
         catch (Exception ex)
         {
@@ -90,7 +91,7 @@ public static class FileManager
     /// Reads the Config.json file and interprets it to the Config class structure.
     /// </summary>
     /// <returns>The interpreted Config in the Config class structure</returns>
-    public static async Task<TemplateClasses.Config?> ReadConfigFile()
+    public static async Task<Config?> ReadConfigFile()
     {
         string configPath = GetFilePath("Config.json");
         
@@ -99,11 +100,11 @@ public static class FileManager
             await CreateConfigFile();
         }
         
-        TemplateClasses.Config? config;
+        Config? config;
         try
         {
             var configJson = await File.ReadAllTextAsync(configPath);
-            config = JsonSerializer.Deserialize<TemplateClasses.Config>(configJson);
+            config = JsonSerializer.Deserialize<Config>(configJson);
         }
         catch (Exception ex)
         {
@@ -127,7 +128,7 @@ public static class FileManager
     /// Reads the GamesToMonitor.json file and interprets it to the GamesToMonitor class structure.
     /// </summary>
     /// <returns>The interpreted GamesToMonitor in the GamesToMonitor class structure</returns>
-    public static async Task<List<TemplateClasses.GamesToMonitor>?> ReadGamesToMonitorFile()
+    public static async Task<List<GamesToMonitor>?> ReadGamesToMonitorFile()
     {
         string gameCommPath = GetFilePath("GamesToMonitor.json");
         
@@ -140,7 +141,7 @@ public static class FileManager
         try
         {
             var gameCommJson = await File.ReadAllTextAsync(gameCommPath);
-            var gameComms = JsonSerializer.Deserialize<List<TemplateClasses.GamesToMonitor>>(gameCommJson);
+            var gameComms = JsonSerializer.Deserialize<List<GamesToMonitor>>(gameCommJson);
             return gameComms;
         }
         catch (Exception ex)

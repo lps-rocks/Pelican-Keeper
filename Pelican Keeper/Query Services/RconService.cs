@@ -44,7 +44,7 @@ public class RconService(string ip, int port, string password) : ISendCommand, I
         var response = await ReadResponseAsync();
         if (Program.Config.Debug)
             ConsoleExt.WriteLineWithPretext($"RCON command response: {response.body.Trim()}");
-        return response.body.Trim();
+        return response.body.Trim(); //TODO: Do the Player count text format correction here before returning instead of outside the function to streamline the process
     }
 
     public void Dispose()

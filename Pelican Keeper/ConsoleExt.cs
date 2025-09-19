@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.ObjectModel;
 
 
 namespace Pelican_Keeper;
@@ -6,7 +7,9 @@ namespace Pelican_Keeper;
 public static class ConsoleExt
 {
     public static bool ExceptionOccurred;
-    public static readonly List<Exception> Exceptions = new();
+    public static IReadOnlyCollection<Exception> Exceptions => _exceptions;
+    // ReSharper disable once InconsistentNaming
+    private static readonly LinkedList<Exception> _exceptions = new();
     
     public enum OutputType
     {
@@ -39,7 +42,7 @@ public static class ConsoleExt
 
         if (exception == null) return length1 + length2;
         ExceptionOccurred = true;
-        Exceptions.Add(exception);
+        _exceptions.AddLast(exception);
         Console.WriteLine($"Exception: {exception.Message}");
         Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;
@@ -68,7 +71,7 @@ public static class ConsoleExt
 
         if (exception == null) return length1 + length2;
         ExceptionOccurred = true;
-        Exceptions.Add(exception);
+        _exceptions.AddLast(exception);
         Console.WriteLine($"Exception: {exception.Message}");
         Console.WriteLine($"Stack Trace: {exception.StackTrace}");
         return length1 + length2;

@@ -4,6 +4,7 @@
   "MessageSorting": "Name",
   "MessageSortingDirection": "Ascending",
   "IgnoreOfflineServers": false,
+  "IgnoreInternalServers": false,
   "ServersToIgnore": ["UUIDS HERE"],
   
   "JoinableIpDisplay": true,
