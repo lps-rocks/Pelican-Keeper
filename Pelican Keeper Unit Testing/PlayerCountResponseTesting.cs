@@ -41,7 +41,7 @@ public class PlayerCountResponseTesting
                     {
                         RconService rcon = new RconService(_ip, (int)_port, _password);
                         await rcon.Connect();
-                        response = await rcon.SendCommandAsync(_command);
+                        response = await rcon.SendCommandAsync(_command, null);
                     }
                     else
                     {
@@ -51,12 +51,18 @@ public class PlayerCountResponseTesting
                 }
                 case CommandExecutionMethod.MinecraftJava:
                 {
-                    response = await JavaMinecraftQueryService.GetPlayerCountsAsync(_ip, (int)_port);
+                    JavaMinecraftQueryService javaMinecraftQuery = new JavaMinecraftQueryService(_ip, (int)_port);
+        
+                    await javaMinecraftQuery.Connect();
+                    response = await javaMinecraftQuery.SendCommandAsync();
                     break;
                 }
                 case CommandExecutionMethod.MinecraftBedrock:
                 {
-                    response = await BedrockMinecraftQueryService.GetPlayerCountsAsync(_ip, (int)_port);
+                    BedrockMinecraftQueryService bedrockMinecraftQuery = new BedrockMinecraftQueryService(_ip, (int)_port);
+        
+                    await bedrockMinecraftQuery.Connect();
+                    response = await bedrockMinecraftQuery.SendCommandAsync();
                     break;
                 }
                 case null:
@@ -68,7 +74,7 @@ public class PlayerCountResponseTesting
         
         if (!string.IsNullOrEmpty(response))
         {
-            var cleanResponse = HelperClass.ServerPlayerCountDisplayCleanup(response, null, 30);
+            var cleanResponse = HelperClass.ServerPlayerCountDisplayCleanup(response, 30);
             var playerMaxPlayer = Regex.Match(cleanResponse, @"^(\d+)\/\d+$");
             if (playerMaxPlayer.Success)
             {

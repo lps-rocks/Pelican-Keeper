@@ -35,16 +35,18 @@ public class RconService(string ip, int port, string password) : ISendCommand, I
         return response.type == 2 && response.id == _requestId;
     }
 
-    public async Task<string> SendCommandAsync(string command)
+    public async Task<string> SendCommandAsync(string command, string? regexPattern)
     {
+        if (_tcpClient == null || _stream == null)
+            throw new InvalidOperationException("Call Connect() before sending commands.");
         _requestId++;
         byte[] packet = CreatePacket(_requestId, 2, command);
-        await _stream!.WriteAsync(packet);
+        await _stream.WriteAsync(packet);
 
         var response = await ReadResponseAsync();
         if (Program.Config.Debug)
             ConsoleExt.WriteLineWithPretext($"RCON command response: {response.body.Trim()}");
-        return response.body.Trim(); //TODO: Do the Player count text format correction here before returning instead of outside the function to streamline the process
+        return HelperClass.ExtractPlayerCount(response.body.Trim(), regexPattern).ToString();
     }
 
     public void Dispose()

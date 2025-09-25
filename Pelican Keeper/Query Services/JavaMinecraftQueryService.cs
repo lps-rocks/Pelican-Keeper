@@ -5,39 +5,47 @@ using System.Text.Json;
 
 namespace Pelican_Keeper.Query_Services;
 
-public static class JavaMinecraftQueryService //TODO: This should inherit from the ISendCommand Interface
+public class JavaMinecraftQueryService(string ip, int port) : ISendCommand, IDisposable
 {
-    /// <summary>
-    /// Queries a Minecraft server (Java edition) for current/maximum players using the status protocol.
-    /// </summary>
-    /// <param name="host">Host IP</param>
-    /// <param name="port">Port of the Server</param>
-    /// <param name="timeoutMs">Timeout in Ms</param>
-    /// <param name="protocolVersion">Protocol Version</param>
-    /// <returns>String in the format of Players/MaxPlayers</returns>
-    /// <exception cref="InvalidDataException">An unexpected packet ID was returned by the Server</exception>
-    public static async Task<string> GetPlayerCountsAsync(string host, int port = 25565, int timeoutMs = 5000, int protocolVersion = 760)
+    private TcpClient? _tcpClient;
+    private NetworkStream? _stream;
+    
+    public async Task Connect()
     {
-        using var cts = new CancellationTokenSource(timeoutMs);
         try
         {
-            using var client = new TcpClient();
-            await client.ConnectAsync(host, port, cts.Token);
-            await using var stream = client.GetStream();
+            _tcpClient = new TcpClient();
+            await _tcpClient.ConnectAsync(ip, port);
+            _tcpClient.Client.ReceiveTimeout = 5000;
+            _stream = _tcpClient.GetStream();
+        }
+        catch (SocketException ex)
+        {
+            ConsoleExt.WriteLineWithPretext($"Could not connect to server. {ip}:{port}", ConsoleExt.OutputType.Error, ex);
+        }
+    }
 
+    public async Task<string> SendCommandAsync(string? command = null, string? regexPattern = null)
+    {
+        if (_tcpClient == null || _stream == null)
+            throw new InvalidOperationException("Call Connect() before sending commands.");
+        var protocolVersion = 760;
+        using var cts = new CancellationTokenSource(_tcpClient.Client.ReceiveTimeout);
+        try
+        {
             using (var ms = new MemoryStream())
             {
                 WriteVarInt(ms, 0x00); // packet id
                 WriteVarInt(ms, protocolVersion); // protocol version (ignored for status, but still has to be included)
-                WriteString(ms, host); // server address
+                WriteString(ms, ip); // server address
                 WriteUShort(ms, (ushort)port); // server port
                 WriteVarInt(ms, 0x01); // next state = status
-                await SendFramedAsync(stream, ms.ToArray(), cts.Token);
+                await SendFramedAsync(_stream, ms.ToArray(), cts.Token);
             }
 
-            await SendFramedAsync(stream, [0x00], cts.Token);
+            await SendFramedAsync(_stream, [0x00], cts.Token);
 
-            var payload = await ReadPacketAsync(stream, cts.Token);
+            var payload = await ReadPacketAsync(_stream, cts.Token);
             using var rms = new MemoryStream(payload);
 
             var packetId = ReadVarInt(rms);
@@ -59,10 +67,6 @@ public static class JavaMinecraftQueryService //TODO: This should inherit from t
         catch (OperationCanceledException)
         {
             return "Timed out waiting for server response.";
-        }
-        catch (SocketException)
-        {
-            return "Could not connect to server.";
         }
         catch (Exception ex)
         {
@@ -161,5 +165,12 @@ public static class JavaMinecraftQueryService //TODO: This should inherit from t
         int read = await stream.ReadAsync(buffer, 0, 1, ct);
         if (read == 0) throw new EndOfStreamException();
         return buffer[0];
+    }
+
+    public void Dispose()
+    {
+        _tcpClient.Close();
+        _tcpClient = null;
+        _stream = null;
     }
 }

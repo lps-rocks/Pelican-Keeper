@@ -123,9 +123,9 @@ public static class HelperClass
     /// Extracts the Player count for a server depending on its response.
     /// </summary>
     /// <param name="serverResponse">The Servers Response</param>
-    /// <param name="regexPattern">Custom Regex Pattern provided by the user</param>
+    /// <param name="regexPattern">Optional! Custom Regex Pattern provided by the user</param>
     /// <returns>An int of the Player count, and 0 if nothing is found</returns>
-    public static int ExtractPlayerCount(string? serverResponse, string? regexPattern)
+    public static int ExtractPlayerCount(string? serverResponse, string? regexPattern = null)
     {
         if (string.IsNullOrEmpty(serverResponse))
         {
@@ -147,7 +147,7 @@ public static class HelperClass
             return arkRconPlayerList.Length;
 
         var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
-        if (palworldPlayerList.Success)
+        if (palworldPlayerList.Success || serverResponse.Contains("name,playeruid,steamid"))
             return palworldPlayerList.Length;
         
         // Custom User-defined regex pattern
@@ -163,7 +163,7 @@ public static class HelperClass
             }
         }
         
-        ConsoleExt.WriteLineWithPretext("The Bot was unable to determine the Player Count of the Server!", ConsoleExt.OutputType.Error);
+        ConsoleExt.WriteLineWithPretext("The Bot was unable to determine the Player Count of the Server!", ConsoleExt.OutputType.Error, new Exception(serverResponse));
         return 0;
     }
 
@@ -171,14 +171,13 @@ public static class HelperClass
     /// Cleans up the Server response into a clean and readable end user display string.
     /// </summary>
     /// <param name="serverResponse">The Server response</param>
-    /// <param name="regexPattern">Custom Regex Pattern provided by the user</param>
     /// <param name="maxPlayers">Optional! A hard-coded string if left empty for the max number the server can have</param>
     /// <returns>A User readable string of the player count</returns>
-    public static string ServerPlayerCountDisplayCleanup(string? serverResponse, string? regexPattern, int maxPlayers = 0)
+    public static string ServerPlayerCountDisplayCleanup(string? serverResponse, int maxPlayers = 0)
     {
         string maxPlayerCount = "Unknown";
         
-        if (serverResponse is "No response from RCON command." or "Command sent via Pelican API." or "No response from A2S query." && maxPlayers > 0 || (string.IsNullOrEmpty(serverResponse) && maxPlayers > 0))
+        if (string.IsNullOrEmpty(serverResponse) && maxPlayers > 0)
         {
             return $"N/A/{maxPlayers}";
         }
@@ -192,34 +191,8 @@ public static class HelperClass
         {
             maxPlayerCount = maxPlayers.ToString();
         }
-        
-        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo\s+Players?\b[.!]?");
-        if (noPlayer.Success) return $"0/{maxPlayerCount}";
-        
-        var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
-        if (playerMaxPlayer.Success)
-            return playerMaxPlayer.Value;
-        
-        var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
-        if (arkRconPlayerList.Success)
-            return $"{arkRconPlayerList.Length}/{maxPlayerCount}";
-        
-        var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
-        if (palworldPlayerList.Success || serverResponse.Contains("name,playeruid,steamid"))
-        {
-            return $"{palworldPlayerList.Length}/{maxPlayerCount}";
-        }
-        
-        // Custom User-defined regex pattern
-        if (regexPattern != null)
-        {
-            var customMatch = Regex.Match(serverResponse, regexPattern);
-            if (customMatch.Success)
-            {
-                return $"{customMatch}/{maxPlayerCount}";
-            }
-        }
-        return serverResponse;
+
+        return $"{serverResponse}/{maxPlayerCount}";
     }
     
     /// <summary>
@@ -354,5 +327,16 @@ public static class HelperClass
         }
         FlushButtons();
         Console.WriteLine($"[SUMMARY] rows={rows}, total components={total}");
+    }
+    
+    /// <summary>
+    /// Gets the raw JSON text from a URL
+    /// </summary>
+    /// <param name="url">Github URL</param>
+    /// <returns>the raw JSON</returns>
+    public static async Task<string> GetJsonTextAsync(string url)
+    {
+        using var http = new HttpClient();
+        return await http.GetStringAsync(url);
     }
 }

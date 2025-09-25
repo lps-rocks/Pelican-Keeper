@@ -151,6 +151,7 @@ public abstract class TemplateClasses
         public string? Command { get; set; }
         public string? QueryPortVariable { get; set; }
         public string? MaxPlayerVariable { get; set; }
+        public string? MaxPlayer { get; set; }
         public string? PlayerCountExtractRegex { get; set; }
     }
     

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using Newtonsoft.Json;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Pelican_Keeper;
 
@@ -10,15 +11,23 @@ public static class FileManager
     /// <summary>
     /// Gets the file path if it exists in the current execution directory or in the Pelican Keeper directory.
     /// </summary>
-    /// <param name="path">The File path to check</param>
+    /// <param name="fileNameWithExtension">The File name with Extension to check</param>
     /// <returns>The File path or empty string</returns>
-    public static string GetFilePath(string path)
+    public static string GetFilePath(string fileNameWithExtension)
     {
-        if (File.Exists(path))
+        if (File.Exists(fileNameWithExtension))
         {
-            return path;
+            return fileNameWithExtension;
         }
-        return File.Exists(Path.Combine(Environment.CurrentDirectory, "Pelican Keeper", path)) ? Path.Combine(Environment.CurrentDirectory, "Pelican Keeper", path) : string.Empty;
+        
+        foreach (var file in Directory.GetFiles(Environment.CurrentDirectory, fileNameWithExtension, SearchOption.AllDirectories))
+        {
+            return file;
+        }
+        
+        WriteLineWithPretext($"Couldn't find {fileNameWithExtension} file in program directory!", OutputType.Error, new FileNotFoundException());
+        Environment.Exit(20);
+        return string.Empty;
     }
 
     /// <summary>
@@ -40,9 +49,17 @@ public static class FileManager
     private static async Task CreateConfigFile()
     {
         await using var configFile = File.Create("Config.json");
-        var defaultConfig = new string("{\n  \"InternalIpStructure\": \"192.168.*.*\",\n  \"MessageFormat\": \"Consolidated\",\n  \"MessageSorting\": \"Name\",\n  \"MessageSortingDirection\": \"Ascending\",\n  \"IgnoreOfflineServers\": false,\n  \"IgnoreInternalServers\": false,\n  \"ServersToIgnore\": [\"UUIDS HERE\"],\n  \n  \"JoinableIpDisplay\": true,\n  \"PlayerCountDisplay\": true,\n  \"ServersToMonitor\": [\"UUIDS HERE\"],\n  \n  \"AutomaticShutdown\": true,\n  \"ServersToAutoShutdown\": [\"UUIDS HERE\"],\n  \"EmptyServerTimeout\": \"00:01:00\",\n  \"AllowUserServerStartup\": true,\n  \"AllowServerStartup\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStartServers\": [\"USERID HERE\"],\n  \"AllowUserServerStopping\": true,\n  \"AllowServerStopping\": [\"UUIDS HERE\"],\n  \"UsersAllowedToStopServers\": [\"USERID HERE\"],\n  \n  \"ContinuesMarkdownRead\": true,\n  \"ContinuesGamesToMonitorRead\": true,\n  \"MarkdownUpdateInterval\": 30,\n  \"ServerUpdateInterval\": 10,\n  \n  \"LimitServerCount\": false,\n  \"MaxServerCount\": 10,\n  \"ServersToDisplay\": [\"UUIDS HERE\"],\n  \n  \"Debug\": false,\n  \"DryRun\": false\n}");
+        var defaultConfig = HelperClass.GetJsonTextAsync("https://raw.githubusercontent.com/SirZeeno/Pelican-Keeper/refs/heads/testing/Pelican%20Keeper/Config.json").GetAwaiter().GetResult();
         await using var writer = new StreamWriter(configFile);
         await writer.WriteAsync(defaultConfig);
+    }
+    
+    private static async Task CreateGamesToMonitorFile()
+    {
+        await using var gamesToMonitorFile = File.Create("GamesToMonitor.json");
+        var gamesToMonitor = HelperClass.GetJsonTextAsync("https://raw.githubusercontent.com/SirZeeno/Pelican-Keeper/refs/heads/testing/Pelican%20Keeper/GamesToMonitor.json").GetAwaiter().GetResult();
+        await using var writer = new StreamWriter(gamesToMonitorFile);
+        await writer.WriteAsync(gamesToMonitor);
     }
 
     /// <summary>
@@ -51,9 +68,9 @@ public static class FileManager
     public static async Task CreateMessageMarkdownFile()
     {
         await using var messageMarkdownFile = File.Create("MessageMarkdown.txt");
-        var defaultConfig = new string("[Title]🎮 **{{ServerName}}**[/Title]\n\n{{StatusIcon}} **Status:** {{Status}}\n🖥️ **CPU:** {{Cpu}}\n🧠 **Memory:** {{Memory}}\n💽 **Disk:** {{Disk}}\n📥 **NetworkRX:** {{NetworkRx}}\n📤 **NetworkTX:** {{NetworkTx}}\n⏳ **Uptime:** {{Uptime}}");
+        var defaultMarkdown = HelperClass.GetJsonTextAsync("https://raw.githubusercontent.com/SirZeeno/Pelican-Keeper/refs/heads/testing/Pelican%20Keeper/MessageMarkdown.txt").GetAwaiter().GetResult();
         await using var writer = new StreamWriter(messageMarkdownFile);
-        await writer.WriteAsync(defaultConfig);
+        await writer.WriteAsync(defaultMarkdown);
     }
     
     /// <summary>
@@ -66,6 +83,7 @@ public static class FileManager
         
         if (secretsPath == String.Empty)
         {
+            Console.WriteLine("Secrets.json not found. Pulling Default from Github!");
             await CreateSecretsFile();
             return null;
         }
@@ -73,13 +91,26 @@ public static class FileManager
         Secrets? secrets;
         try
         {
+            var settings = new JsonSerializerSettings
+            {
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+                NullValueHandling = NullValueHandling.Include,
+                Error = (sender, args) =>
+                {
+                    // skip invalid values instead of throwing
+                    args.ErrorContext.Handled = true;
+                }
+            };
+            
             var secretsJson = await File.ReadAllTextAsync(secretsPath);
-            secrets = JsonSerializer.Deserialize<Secrets>(secretsJson)!;
+            
+            secrets = JsonConvert.DeserializeObject<Secrets>(secretsJson, settings); // for ignoring errors when deserializing the secrets file, since I may edit the structure in the future and i want this to tell the user what changed.
+            Validator.ValidateSecrets(secrets);
         }
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and is in the correct format. Check Secrets.json", OutputType.Error, ex);
-            Environment.Exit(0);
+            Environment.Exit(1);
             return null;
         }
 
@@ -97,6 +128,7 @@ public static class FileManager
         
         if (configPath == String.Empty)
         {
+            Console.WriteLine("Config.json not found. Pulling Default from Github!");
             await CreateConfigFile();
         }
         
@@ -109,14 +141,14 @@ public static class FileManager
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load config. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
-            Environment.Exit(0);
+            Environment.Exit(1);
             return null;
         }
         
         if (config == null)
         {
             WriteLineWithPretext("Config file is empty or not in the correct format. Please check Config.json", OutputType.Error);
-            Environment.Exit(0);
+            Environment.Exit(1);
             return null;
         }
         
@@ -134,7 +166,8 @@ public static class FileManager
         
         if (gameCommPath == String.Empty)
         {
-            WriteLineWithPretext("GamesToMonitor.json not found. Move it to the Main Directory for the bot to find it.", OutputType.Error);
+            WriteLineWithPretext("GamesToMonitor.json not found. Pulling from Github Repo!", OutputType.Error);
+            await CreateGamesToMonitorFile();
             return null;
         }
 

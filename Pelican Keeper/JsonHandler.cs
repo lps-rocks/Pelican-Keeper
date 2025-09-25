@@ -188,16 +188,25 @@ public static class JsonHandler
 
         return queryPort;
     }
-    
+
     /// <summary>
     /// Extracts the max player count from the Input JSON
     /// </summary>
     /// <param name="json">Input JSON</param>
     /// <param name="uuid">UUID of the Server</param>
     /// <param name="variableName">Variable Name of the Max Player Count in the Pelican Panel</param>
+    /// <param name="maxPlayer">Optional! if max player is set, it uses that instead of the variable</param>
     /// <returns>The Max Player Count if found or 0 if not found</returns>
-    public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName)
+    public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName, string? maxPlayer)
     {
+        if (string.IsNullOrEmpty(maxPlayer))
+        {
+            if (int.TryParse(maxPlayer, out int intMaxPlayers))
+            {
+                return intMaxPlayers;
+            }
+        }
+        
         if (variableName == null || variableName.Trim() == string.Empty)
         {
             variableName = "MAX_PLAYERS";

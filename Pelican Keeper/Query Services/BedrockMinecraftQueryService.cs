@@ -6,8 +6,11 @@ using System.Text;
 
 namespace Pelican_Keeper.Query_Services;
 
-public static class BedrockMinecraftQueryService //TODO: This should inherit from the ISendCommand Interface
+public class BedrockMinecraftQueryService(string ip, int port) : ISendCommand, IDisposable
 {
+    private UdpClient? _udpClient;
+    private IPEndPoint? _endPoint;
+    
     // RakNet "magic" bytes used in ping/pong
     private static readonly byte[] Magic =
     {
@@ -15,20 +18,29 @@ public static class BedrockMinecraftQueryService //TODO: This should inherit fro
         0xFD, 0xFD, 0xFD, 0xFD, 0x12, 0x34, 0x56, 0x78
     };
 
-    /// <summary>
-    /// Queries a Bedrock (MCPE) server via RakNet ping for player counts.
-    /// </summary>
-    /// <returns>"online/max" or a descriptive error string</returns>
-    public static async Task<string> GetPlayerCountsAsync(string host, int port = 19132, int timeoutMs = 3000)
+    public Task Connect()
     {
-        using var cts = new CancellationTokenSource(timeoutMs);
-        using var udp = new UdpClient();
-        udp.Client.ReceiveTimeout = timeoutMs;
+        try
+        {
+            _udpClient = new UdpClient();
+            _endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
+            _udpClient.Client.ReceiveTimeout = 3000;
+        }
+        catch (SocketException ex)
+        {
+            ConsoleExt.WriteLineWithPretext($"Could not connect to server. {ip}:{port}", ConsoleExt.OutputType.Error, ex);
+        }
+        
+        ConsoleExt.WriteLineWithPretext("Connected to Bedrock Minecraft server at " + _endPoint);
+        return Task.CompletedTask;
+    }
 
-        // Resolve host to IPEndPoint
-        IPAddress[] addrs = await Dns.GetHostAddressesAsync(host, cts.Token);
-        if (addrs.Length == 0) return "Error: host not found";
-        var endPoint = new IPEndPoint(addrs.First(), port);
+    public async Task<string> SendCommandAsync(string? command = null, string? regexPattern = null)
+    {
+        if (_udpClient == null || _endPoint == null)
+            throw new InvalidOperationException("Call Connect() before sending commands.");
+        
+        using var cts = new CancellationTokenSource(_udpClient.Client.ReceiveTimeout);
 
         // Build Unconnected Ping
         // Structure: [0x01][8B time][16B magic][8B client GUID]
@@ -41,13 +53,13 @@ public static class BedrockMinecraftQueryService //TODO: This should inherit fro
         var guid = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
         BinaryPrimitives.WriteInt64BigEndian(packet.AsSpan(1 + 8 + 16), guid);
 
-        await udp.SendAsync(packet, packet.Length, endPoint);
+        await _udpClient.SendAsync(packet, packet.Length, _endPoint);
 
         UdpReceiveResult resp;
         try
         {
-            var recvTask = udp.ReceiveAsync();
-            var completed = await Task.WhenAny(recvTask, Task.Delay(timeoutMs, cts.Token));
+            var recvTask = _udpClient.ReceiveAsync();
+            var completed = await Task.WhenAny(recvTask, Task.Delay(_udpClient.Client.ReceiveTimeout, cts.Token));
             if (completed != recvTask) return "Timed out waiting for server response.";
             resp = recvTask.Result;
         }
@@ -99,7 +111,7 @@ public static class BedrockMinecraftQueryService //TODO: This should inherit fro
             motdString = Encoding.UTF8.GetString(buf, offset, remaining);
         }
 
-        // Expected format (semicolon-separated), e.g.:
+        // Expected format (semicolon-separated), e.g.;
         // "MCPE;MOTD;Protocol;Version;Online;Max;ServerId;LevelName;GameMode;GameModeNum;PortV4;PortV6"
         var parts = motdString.Split(';');
         if (parts.Length < 6 || !string.Equals(parts[0], "MCPE", StringComparison.OrdinalIgnoreCase))
@@ -110,5 +122,12 @@ public static class BedrockMinecraftQueryService //TODO: This should inherit fro
         if (!int.TryParse(parts[5], out var max)) max = 0;
 
         return $"{online}/{max}";
+    }
+
+    public void Dispose()
+    {
+        _udpClient?.Close();
+        _udpClient = null;
+        _endPoint = null;
     }
 }

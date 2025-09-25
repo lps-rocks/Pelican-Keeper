@@ -32,5 +32,16 @@
     "Game": "NeoForge",
     "Protocol": "MinecraftJava",
     "QueryPortVariable": "SERVER_PORT"
+  },
+  {
+    "Game": "Purpur-Geyser-Floodgate",
+    "Protocol": "MinecraftBedrock",
+    "QueryPortVariable": "SERVER_PORT"
+  },
+  {
+    "Game": "Valheim",
+    "Protocol": "A2S",
+    "QueryPortVariable": "SERVER_PORT+1",
+    "MaxPlayer": "10"
   }
 ]

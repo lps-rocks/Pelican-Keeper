@@ -38,7 +38,7 @@ internal static class Program
 
         if (FileManager.GetFilePath("MessageMarkdown.txt") == String.Empty)
         {
-            Console.WriteLine("MessageMarkdown.txt not found. Creating default one.");
+            Console.WriteLine("MessageMarkdown.txt not found. Pulling Default from Github!");
             _ = FileManager.CreateMessageMarkdownFile();
         }
 
@@ -338,7 +338,7 @@ internal static class Program
                                 
                                 var msg = await channel.GetMessageAsync(cacheEntry.Key);
 
-                                if (EmbedHasChanged(uuids, updatedEmbed)) //TODO: If this is on the same page in both channels it wont update one of them
+                                if (EmbedHasChanged(uuids, updatedEmbed))
                                 {
                                     if (Config.Debug)
                                         WriteLineWithPretext($"Updating paginated message {cacheEntry.Key} on page {currentIndex}");

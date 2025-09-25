@@ -19,7 +19,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         return Task.CompletedTask;
     }
 
-    public async Task<string> SendCommandAsync(string? command = null)
+    public async Task<string> SendCommandAsync(string? command = null, string? regexPattern = null)
     {
         if (_udpClient == null || _endPoint == null)
             throw new InvalidOperationException("Call Connect() before sending commands.");
@@ -32,7 +32,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         if (first == null)
         {
             ConsoleExt.WriteLineWithPretext("Timed out waiting for server response.", ConsoleExt.OutputType.Error);
-            return "Timeout or no response";
+            return HelperClass.ExtractPlayerCount("Timeout or no response").ToString();
         }
 
         if (Program.Config.Debug)
@@ -62,7 +62,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
                 if (second == null)
                 {
                     ConsoleExt.WriteLineWithPretext("Timed out waiting for challenged info response.", ConsoleExt.OutputType.Error);
-                    return "Timeout or no response";
+                    return HelperClass.ExtractPlayerCount("Timeout or no response").ToString();
                 }
 
                 if (Program.Config.Debug)
@@ -71,12 +71,12 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
                     DumpBytes(second);
                 }
 
-                return ParseOrFail(second);
+                return HelperClass.ExtractPlayerCount(ParseOrFail(second)).ToString();
             }
             // 0x49 = 'I' = S2A_INFO (immediate info response, no challenge)
             if (header == 0x49)
             {
-                return ParseOrFail(first); //TODO: Do the Player count text format correction here before returning instead of outside the function to streamline the process
+                return HelperClass.ExtractPlayerCount(ParseOrFail(first)).ToString();
             }
 
             // Some servers may reply multi-packet (0xFE) or other types, but I will treat them as unsupported for now
@@ -85,7 +85,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         }
 
         ConsoleExt.WriteLineWithPretext("Invalid or unexpected response.", ConsoleExt.OutputType.Error);
-        return "Failed to parse response.";
+        return HelperClass.ExtractPlayerCount("Failed to parse response.").ToString();
     }
 
     private static async Task<byte[]?> ReceiveWithTimeoutAsync(UdpClient udp, int timeoutMs)
@@ -101,7 +101,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         }
         catch (SocketException ex)
         {
-            ConsoleExt.WriteLineWithPretext("No response from server.", ConsoleExt.OutputType.Error, ex);
+            ConsoleExt.WriteLineWithPretext($"No response from server.", ConsoleExt.OutputType.Error, ex);
             return null;
         }
     }
