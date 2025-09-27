@@ -133,8 +133,10 @@ public static class HelperClass
             return 0;
         }
 
-        var noPlayer = Regex.Match(serverResponse, @"(?i)\bNo\s+Players?\b[.!]?");
-        if (noPlayer.Success) return 0;
+        if (!serverResponse.Any(char.IsDigit))
+        {
+            return 0; // No digits found in the server response, so player count is 0 (probably a "no players" message or connection error/timeout)
+        }
         
         var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
         if (playerMaxPlayer.Success && int.TryParse(playerMaxPlayer.Groups[1].Value, out var playerCount))

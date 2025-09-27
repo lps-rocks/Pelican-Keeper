@@ -41,7 +41,7 @@
   {
     "Game": "Valheim",
     "Protocol": "A2S",
-    "QueryPortVariable": "SERVER_PORT+1",
+    "QueryPortVariable": "SERVER_PORT",
     "MaxPlayer": "10"
   }
 ]

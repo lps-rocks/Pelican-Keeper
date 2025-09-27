@@ -199,7 +199,7 @@ public static class JsonHandler
     /// <returns>The Max Player Count if found or 0 if not found</returns>
     public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName, string? maxPlayer)
     {
-        if (string.IsNullOrEmpty(maxPlayer))
+        if (!string.IsNullOrEmpty(maxPlayer))
         {
             if (int.TryParse(maxPlayer, out int intMaxPlayers))
             {
