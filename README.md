@@ -9,6 +9,9 @@
 # Pelican Keeper
 A Discord bot that will display the status of your Pelican Game Servers in a Discord Channel
 
+> [!CAUTION]
+> The Secrets File has been changed to accomidate with multi-channel messaging, Look at the JSON structure below where you'll see the new structure!
+
 This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 > [!TIP]
 > This bot can be installed and run on the generic C# Egg on Pelican.
@@ -89,7 +92,7 @@ dotnet run --project "Pelican Keeper"
   "ServerToken": "YOUR_SERVER_TOEKN",
   "ServerUrl": "YOUR_BASIC_SERVER_URL",
   "BotToken": "YOUR_DISCORD_BOT_TOKEN",
-  "ChannelId": THE_CHANNELID_YOU_WANT_THE_BOT_TO_POST_IN,
+  "ChannelIds": [THE_CHANNELID_YOU_WANT_THE_BOT_TO_POST_IN],
   "ExternalServerIP": "YOUR_EXTERNAL_SERVER_IP"
 }
 ```
