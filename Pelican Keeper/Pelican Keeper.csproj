@@ -39,6 +39,7 @@
         </None>
         <None Update="GamesToMonitor.json">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
     </ItemGroup>
 

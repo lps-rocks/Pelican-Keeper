@@ -31,7 +31,8 @@ public abstract class TemplateClasses
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum CommandExecutionMethod
     {
-        PelicanApi, //Thinking about adding the minecraft protocol as well
+        MinecraftJava,
+        MinecraftBedrock,
         Rcon,
         A2S
     }
@@ -42,7 +43,7 @@ public abstract class TemplateClasses
         public string? ServerToken { get; init; }
         public string? ServerUrl { get; init; }
         public string? BotToken { get; init; }
-        public ulong ChannelId { get; init; }
+        public ulong[]? ChannelIds { get; init; }
         public string? ExternalServerIp { get; init; }
     }
     
@@ -53,6 +54,7 @@ public abstract class TemplateClasses
         public MessageSorting MessageSorting { get; init; }
         public MessageSortingDirection MessageSortingDirection { get; init; }
         public bool IgnoreOfflineServers { get; init; }
+        public bool IgnoreInternalServers { get; init; }
         public string[]? ServersToIgnore { get; init; }
         
         public bool JoinableIpDisplay { get; init; }
@@ -64,7 +66,11 @@ public abstract class TemplateClasses
         public string? EmptyServerTimeout { get; init; }
         public bool AllowUserServerStartup { get; init; }
         public string[]? AllowServerStartup { get; init; }
-        
+        public string[]? UsersAllowedToStartServers { get; init; }
+        public bool AllowUserServerStopping { get; init; }
+        public string[]? AllowServerStopping { get; init; }
+        public string[]? UsersAllowedToStopServers { get; init; }
+
         public bool ContinuesMarkdownRead { get; init; }
         public bool ContinuesGamesToMonitorRead { get; init; }
         public int MarkdownUpdateInterval { get; init; }
@@ -145,6 +151,7 @@ public abstract class TemplateClasses
         public string? Command { get; set; }
         public string? QueryPortVariable { get; set; }
         public string? MaxPlayerVariable { get; set; }
+        public string? MaxPlayer { get; set; }
         public string? PlayerCountExtractRegex { get; set; }
     }
     

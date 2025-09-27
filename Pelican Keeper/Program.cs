@@ -9,16 +9,17 @@ using static TemplateClasses;
 using static HelperClass; 
 using static PelicanInterface;
 using static ConsoleExt;
+using static DiscordInteractions;
 
 
 internal static class Program
 {
-    internal static DiscordChannel? TargetChannel;
+    internal static List<DiscordChannel?> TargetChannel = null!;
     internal static Secrets Secrets = null!;
     internal static Config Config = null!;
     private static readonly EmbedBuilderService EmbedService = new();
-    private static List<DiscordEmbed> _pages = null!;
-    private static List<ServerInfo> _serverInfo = null!;
+    internal static List<DiscordEmbed> EmbedPages = null!;
+    internal static List<ServerInfo> GlobalServerInfo = null!;
 
     private enum EmbedUpdateMode
     {
@@ -30,16 +31,18 @@ internal static class Program
 
     private static async Task Main()
     {
+        TargetChannel = [];
+        
         await FileManager.ReadSecretsFile();
         await FileManager.ReadConfigFile();
 
         if (FileManager.GetFilePath("MessageMarkdown.txt") == String.Empty)
         {
-            Console.WriteLine("MessageMarkdown.txt not found. Creating default one.");
+            Console.WriteLine("MessageMarkdown.txt not found. Pulling Default from Github!");
             _ = FileManager.CreateMessageMarkdownFile();
         }
 
-        GetServersToMonitorFileAsync();
+        GetGamesToMonitorFileAsync();
         ServerMarkdown.GetMarkdownFileContentAsync();
 
         var discord = new DiscordClient(new DiscordConfiguration
@@ -53,127 +56,13 @@ internal static class Program
         discord.MessageDeleted += OnMessageDeleted;
         discord.ComponentInteractionCreated += OnPageFlipInteraction;
         discord.ComponentInteractionCreated += OnServerStartInteraction;
+        discord.ComponentInteractionCreated += OnServerStopInteraction;
+        discord.ComponentInteractionCreated += OnDropDownInteration;
         
         await discord.ConnectAsync();
         await Task.Delay(-1);
     }
-
-    /// <summary>
-    /// Function that is called when a component interaction is created.
-    /// It handles the page flipping of the paginated message using buttons.
-    /// </summary>
-    /// <param name="sender">DiscordClient</param>
-    /// <param name="e">ComponentInteractionCreateEventArgs</param>
-    /// <returns>Task of Type Task</returns>
-    private static async Task<Task> OnPageFlipInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
-    {
-        if (LiveMessageStorage.GetPaginated(e.Message.Id) is not { } pagedTracked || e.User.IsBot)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext("User is Bot or is not tracked, message ID is null.", OutputType.Warning);
-            return Task.CompletedTask;
-        }
-
-        int index = pagedTracked;
-
-        switch (e.Id)
-        {
-            case "next_page":
-                index = (index + 1) % _pages.Count;
-                break;
-            case "prev_page":
-                index = (index - 1 + _pages.Count) % _pages.Count;
-                break;
-            default:
-                if (Config.Debug)
-                    WriteLineWithPretext("Unknown interaction ID: " + e.Id, OutputType.Warning);
-                return Task.CompletedTask;
-        }
-
-        LiveMessageStorage.Save(e.Message.Id, index);
-                
-        if (_pages.Count == 0 || pagedTracked >= _pages.Count)
-        {
-            WriteLineWithPretext("No pages to show or page index out of range", OutputType.Warning);
-            return Task.CompletedTask;
-        }
-
-        try
-        {
-            // treat "UUIDS HERE" placeholder or empty/null list as "allow all"
-            bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-            WriteLineWithPretext(Config.AllowServerStartup[0]);
-            WriteLineWithPretext("show all: " + allowAll);
-
-            // allow only if user-startup enabled, not ignoring offline, and either allow-all or in allow-list
-            bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(_serverInfo[index].Uuid, StringComparer.OrdinalIgnoreCase));
-            WriteLineWithPretext("show start: " + showStart);
-
-            var components = new List<DiscordComponent>
-            {
-                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous")
-            };
-            if (showStart)
-            {
-                components.Add(new DiscordButtonComponent(ButtonStyle.Primary, _serverInfo[index].Uuid, "Start"));
-            }
-            components.Add(new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️"));
-            await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
-                new DiscordInteractionResponseBuilder()
-                    .AddEmbed(_pages[index])
-                    .AddComponents(components)
-            );
-        }
-        catch (NotFoundException nf)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext("Interaction expired or already responded to. Skipping. " + nf.Message, OutputType.Error);
-        }
-        catch (BadRequestException br)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext("Bad request during interaction: " + br.JsonMessage, OutputType.Error);
-        }
-        catch (Exception ex)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext("Unexpected error during component interaction: " + ex.Message, OutputType.Error);
-        }
-
-        return Task.CompletedTask;
-    }
     
-    private static async Task<Task> OnServerStartInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
-    {
-        if (e.User.IsBot)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext("User is a Bot!", OutputType.Warning);
-            return Task.CompletedTask;
-        }
-
-        if (Config.Debug)
-            WriteLineWithPretext("User " + e.User.Username + " clicked button with ID: " + e.Id);
-        
-        var id = e.Id;
-        var server = _serverInfo.FirstOrDefault(s => s.Uuid == id);
-        if (server == null)
-        {
-            if (Config.Debug)
-                WriteLineWithPretext($"No server found with UUID {id}", OutputType.Warning);
-            return Task.CompletedTask;
-        }
-
-        if (server.Resources?.CurrentState.ToLower() == "offline")
-        {
-            SendPowerCommand(server.Uuid, "start");
-            if (Config.Debug)
-                WriteLineWithPretext("Start command sent to server " + server.Name);
-            await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
-        }
-        return Task.CompletedTask;
-    }
-
     /// <summary>
     /// Function that is called when the bot is ready to send messages.
     /// </summary>
@@ -182,56 +71,30 @@ internal static class Program
     private static async Task OnClientReady(DiscordClient sender, ReadyEventArgs e)
     {
         WriteLineWithPretext("Bot is connected and ready!");
-        TargetChannel = await sender.GetChannelAsync(Secrets.ChannelId);
-        WriteLineWithPretext($"Target channel: {TargetChannel.Name}");
-        _ = StartStatsUpdater(sender, Secrets.ChannelId);
-    }
-    
-    /// <summary>
-    /// Function that is called when a message is deleted in the target channel.
-    /// </summary>
-    /// <param name="sender">DiscordClient</param>
-    /// <param name="e">MessageDeleteEventArgs</param>
-    /// <returns>Task</returns>
-    private static Task OnMessageDeleted(DiscordClient sender, MessageDeleteEventArgs e)
-    {
-        if (e.Message.Channel.Id != Secrets.ChannelId) return Task.CompletedTask;
-
-        var liveMessageTracked = LiveMessageStorage.Get(e.Message.Id);
-        if (liveMessageTracked != null)
+        if (Secrets.ChannelIds != null)
         {
-            if (Config.Debug)
-                WriteLineWithPretext($"Live message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
-            LiveMessageStorage.Remove(liveMessageTracked);
-        }
-        else if (liveMessageTracked == null)
-        {
-            var paginatedMessageTracked = LiveMessageStorage.GetPaginated(e.Message.Id);
-            if (paginatedMessageTracked != null)
+            foreach (var targetChannel in Secrets.ChannelIds)
             {
-                if (Config.Debug)
-                    WriteLineWithPretext($"Paginated message {e.Message.Id} deleted in channel {e.Message.Channel.Name}. Removing from storage.");
-                LiveMessageStorage.Remove(e.Message.Id);
+                var discordChannel = await sender.GetChannelAsync(targetChannel);
+                TargetChannel.Add(discordChannel);
+                WriteLineWithPretext($"Target channel: {discordChannel.Name}");
             }
+
+            _ = StartStatsUpdater(sender, Secrets.ChannelIds);
         }
-        return Task.CompletedTask;
+        else
+        {
+            WriteLineWithPretext("ChannelIds in the Secrets File is empty or not spelled correctly!", OutputType.Error);
+        }
     }
-    
+
     /// <summary>
     /// Starts the Sever statistics updater loop.
     /// </summary>
     /// <param name="client">Bot client</param>
-    /// <param name="channelId">Target channel</param>
-    private static async Task StartStatsUpdater(DiscordClient client, ulong channelId)
+    /// <param name="channelIds">Target channels</param>
+    private static Task StartStatsUpdater(DiscordClient client, ulong[] channelIds)
     {
-        var channel = await client.GetChannelAsync(channelId);
-        
-        if (Config.MessageFormat == null)
-        {
-            WriteLineWithPretext("No embed mode enabled, because MessageFormat in the config is null.", OutputType.Error);
-            return;
-        }
-        
         // When the config is set to consolidate embeds
         if (Config.MessageFormat == MessageFormat.Consolidated)
         {
@@ -240,7 +103,7 @@ internal static class Program
                 async () =>
                 {
                     var serversList = GetServersList();
-                    _serverInfo = serversList;
+                    GlobalServerInfo = serversList;
                     if (serversList.Count == 0)
                     {
                         WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
@@ -252,75 +115,185 @@ internal static class Program
                 async (embedObj, uuids) =>
                 {
                     var embed = (DiscordEmbed)embedObj;
-                    var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault());
-
-                    if (tracked != null)
+                    if (EmbedHasChanged(uuids, embed))
                     {
-                        var msg = await channel.GetMessageAsync((ulong)tracked);
-                        if (EmbedHasChanged(uuids, embed))
+                        foreach (var channelId in channelIds)
                         {
-                            if (Config.Debug)
-                                WriteLineWithPretext($"Updating message {tracked}");
-                            
-                            if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
+                            var channel = await client.GetChannelAsync(channelId);
+                            var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault(x => LiveMessageStorage.MessageExistsAsync([channel], x).Result));
+                        
+                            if (tracked != null && tracked != 0 && !Config.DryRun)
                             {
-                                int index = 0;
-                                List<string?> selectedServerUuids;
-                                
-                                if (Config.AllowServerStartup is { Length: > 0 } && Config.AllowServerStartup[0] != "UUIDS HERE")
+                                var msg = await channel.GetMessageAsync((ulong)tracked);
+                                if (Config.Debug)
+                                    WriteLineWithPretext($"Updating message {tracked}");
+
+                                if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false } or {AllowUserServerStopping: true})
                                 {
-                                    selectedServerUuids = uuids.Where(uuid => Config.AllowServerStartup.Contains(uuid)).ToList();
+                                    List<string?> selectedServerUuids = uuids;
+
+                                    if (Config.AllowServerStartup is { Length: > 0 } && !string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal))
+                                    {
+                                        selectedServerUuids = selectedServerUuids.Where(uuid => Config.AllowServerStartup.Contains(uuid)).ToList();
+                                    }
+                                
+                                    if (Config.AllowServerStopping is { Length: > 0 } && !string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal))
+                                    {
+                                        selectedServerUuids = selectedServerUuids.Where(uuid => Config.AllowServerStopping.Contains(uuid)).ToList();
+                                    }
+
+                                    List<DiscordComponent> buttons = [];
+                                
+                                    // Build START menus
+                                    if (Config.AllowUserServerStartup)
+                                    {
+                                        var startOptions = selectedServerUuids.Select((uuid, i) =>
+                                            new DiscordSelectComponentOption(
+                                                label: GlobalServerInfo[i].Name,     // shown to user
+                                                value: uuid                     // data you read on interaction
+                                            )
+                                        );
+
+                                        foreach (var group in Chunk(startOptions, 25))
+                                        {
+                                            var startMenu = new DiscordSelectComponent(
+                                                customId: "start_menu",
+                                                placeholder: "Start a server…",
+                                                options: group,
+                                                minOptions: 1,
+                                                maxOptions: 1,
+                                                disabled: false
+                                            );
+                                            buttons.Add(startMenu);
+                                        }
+                                    }
+                                
+                                    // Build STOP menus
+                                    if (Config.AllowUserServerStopping)
+                                    {
+                                        var stopOptions = selectedServerUuids.Select((uuid, i) =>
+                                            new DiscordSelectComponentOption(
+                                                label: GlobalServerInfo[i].Name,
+                                                value: uuid
+                                            )
+                                        );
+
+                                        foreach (var group in Chunk(stopOptions, 25))
+                                        {
+                                            var stopMenu = new DiscordSelectComponent(
+                                                customId: "stop_menu",
+                                                placeholder: "Stop a server…",
+                                                options: group,
+                                                minOptions: 1,
+                                                maxOptions: 1,
+                                                disabled: false
+                                            );
+                                            buttons.Add(stopMenu);
+                                        }
+                                    }
+
+                                    WriteLineWithPretext("Buttons created: " + buttons.Count);
+                                    await msg.ModifyAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.AddRows(buttons);
+                                    });
                                 }
                                 else
                                 {
-                                    selectedServerUuids = uuids;
+                                    await msg.ModifyAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.ClearComponents();
+                                    });
                                 }
+                            }
+                            else
+                            {
+                                if (Config.DryRun) continue;
+                                if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false } or {AllowUserServerStopping: true})
+                                {
+                                    List<string?> selectedServerUuids = uuids;
                                 
-                                List<DiscordComponent> buttons = selectedServerUuids.Select(serverUuids => new DiscordButtonComponent(ButtonStyle.Primary, serverUuids, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
+                                    if (Config.AllowServerStartup is { Length: > 0 } && !string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal))
+                                    {
+                                        selectedServerUuids = selectedServerUuids.Where(uuid => Config.AllowServerStartup.Contains(uuid)).ToList();
+                                        WriteLineWithPretext($"Selected Servers: {selectedServerUuids.Count}", OutputType.Warning);
+                                    }
+                                
+                                    if (Config.AllowServerStopping is { Length: > 0 } && !string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal))
+                                    {
+                                        selectedServerUuids = selectedServerUuids.Where(uuid => Config.AllowServerStopping.Contains(uuid)).ToList();
+                                    }
 
-                                WriteLineWithPretext("Buttons created: " + buttons.Count);
-                                await msg.ModifyAsync(mb =>
+                                    List<DiscordComponent> buttons = [];
+                                    // Build START menus
+                                    if (Config.AllowUserServerStartup)
+                                    {
+                                        var startOptions = selectedServerUuids.Select((uuid, i) =>
+                                            new DiscordSelectComponentOption(
+                                                label: GlobalServerInfo[i].Name,     // shown to user
+                                                value: uuid                     // data you read on interaction
+                                            )
+                                        );
+
+                                        foreach (var group in Chunk(startOptions, 25))
+                                        {
+                                            var startMenu = new DiscordSelectComponent(
+                                                customId: "start_menu",
+                                                placeholder: "Start a server…",
+                                                options: group,
+                                                minOptions: 1,
+                                                maxOptions: 1,
+                                                disabled: false
+                                            );
+                                            buttons.Add(startMenu);
+                                        }
+                                    }
+                                
+                                    // Build STOP menus
+                                    if (Config.AllowUserServerStopping)
+                                    {
+                                        var stopOptions = selectedServerUuids.Select((uuid, i) =>
+                                            new DiscordSelectComponentOption(
+                                                label: GlobalServerInfo[i].Name,
+                                                value: uuid
+                                            )
+                                        );
+
+                                        foreach (var group in Chunk(stopOptions, 25))
+                                        {
+                                            var stopMenu = new DiscordSelectComponent(
+                                                customId: "stop_menu",
+                                                placeholder: "Stop a server…",
+                                                options: group,
+                                                minOptions: 1,
+                                                maxOptions: 1,
+                                                disabled: false
+                                            );
+                                            buttons.Add(stopMenu);
+                                        }
+                                    }
+                                
+                                    WriteLineWithPretext("Buttons created: " + buttons.Count);
+                                    DebugDumpComponents(buttons);
+                                    var msg = await channel.SendMessageAsync(mb =>
+                                    {
+                                        mb.WithEmbed(embed);
+                                        mb.AddRows(buttons);
+                                    });
+                                    LiveMessageStorage.Save(msg.Id);
+                                }
+                                else
                                 {
-                                    mb.WithEmbed(embed);
-                                    mb.AddRows(buttons);
-                                });
-                            }
-                            else
-                            {
-                                await msg.ModifyAsync(mb =>
-                                {
-                                    mb.WithEmbed(embed);
-                                    mb.ClearComponents();
-                                });
+                                    var msg = await channel.SendMessageAsync(embed);
+                                    LiveMessageStorage.Save(msg.Id);
+                                }
                             }
                         }
-                        else if (Config.Debug)
-                            WriteLineWithPretext("Message has not changed. Skipping.");
                     }
-                    else
-                    {
-                        if (!Config.DryRun)
-                        {
-                            if (Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false })
-                            {
-                                int index = 0;
-                                List<DiscordComponent> buttons = uuids.Select(uuid => new DiscordButtonComponent(ButtonStyle.Primary, uuid, $"Start: {_serverInfo[index++].Name}")).Cast<DiscordComponent>().ToList();
-
-                                WriteLineWithPretext("Buttons created: " + buttons.Count);
-                                var msg = await channel.SendMessageAsync(mb =>
-                                {
-                                    mb.WithEmbed(embed);
-                                    mb.AddRows(buttons);
-                                });
-                                LiveMessageStorage.Save(msg.Id);
-                            }
-                            else
-                            {
-                                var msg = await channel.SendMessageAsync(embed);
-                                LiveMessageStorage.Save(msg.Id);
-                            }
-                        }
-                    }
+                    else if (Config.Debug)
+                        WriteLineWithPretext("Message has not changed. Skipping.");
                 },
                 delaySeconds: Config.ServerUpdateInterval + Random.Shared.Next(0, Config.ServerUpdateInterval / 2)
             );
@@ -334,7 +307,7 @@ internal static class Program
                 async () =>
                 {
                     var serversList = GetServersList();
-                    _serverInfo = serversList;
+                    GlobalServerInfo = serversList;
                     if (serversList.Count == 0)
                     {
                         WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
@@ -349,48 +322,70 @@ internal static class Program
 
                     if (LiveMessageStorage.Cache is { PaginatedLiveStore: not null })
                     {
-                        var cacheEntry = LiveMessageStorage.Cache.PaginatedLiveStore.LastOrDefault();
-
-                        var pagedTracked = LiveMessageStorage.GetPaginated(cacheEntry.Key);
-                        if (pagedTracked != null)
+                        foreach (var channelId in channelIds)
                         {
-                            _pages = embeds;
+                            var channel = await client.GetChannelAsync(channelId);
+                            var cacheEntry = LiveMessageStorage.Cache.PaginatedLiveStore.LastOrDefault(x => LiveMessageStorage.MessageExistsAsync([channel], x.Key).Result);
 
-                            // Keeps the current page index instead of resetting to 0
-                            var currentIndex = pagedTracked.Value;
-                            var updatedEmbed = embeds[currentIndex];
-                            
-                            var msg = await channel.GetMessageAsync(cacheEntry.Key);
+                            var pagedTracked = LiveMessageStorage.GetPaginated(cacheEntry.Key);
+                            if (pagedTracked != null && !Config.DryRun)
+                            {
+                                EmbedPages = embeds;
 
-                            if (EmbedHasChanged(uuids, updatedEmbed))
-                            {
-                                if (Config.Debug)
-                                    WriteLineWithPretext($"Updating paginated message {cacheEntry.Key} on page {currentIndex}");
-                                await msg.ModifyAsync(updatedEmbed);
-                            }
-                            else if (Config.Debug)
-                                WriteLineWithPretext("Message has not changed. Skipping.");
-                        }
-                        else
-                        {
-                            if (!Config.DryRun)
-                            {
-                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                // Keeps the current page index instead of resetting to 0
+                                var currentIndex = pagedTracked.Value;
+                                var updatedEmbed = embeds[currentIndex];
                                 
-                                WriteLineWithPretext("show all: " + allowAll);
-                                WriteLineWithPretext("show start: " + showStart);
-                                
-                                if (showStart)
+                                var msg = await channel.GetMessageAsync(cacheEntry.Key);
+
+                                if (EmbedHasChanged(uuids, updatedEmbed))
                                 {
-                                    string? uuid = uuids[0];
-                                    var msg = await channel.SendPaginatedMessageAsync(embeds, uuid);
-                                    LiveMessageStorage.Save(msg.Id, 0);
+                                    if (Config.Debug)
+                                        WriteLineWithPretext($"Updating paginated message {cacheEntry.Key} on page {currentIndex}");
+                                    await msg.ModifyAsync(updatedEmbed);
                                 }
-                                else
+                                else if (Config.Debug)
+                                    WriteLineWithPretext("Message has not changed. Skipping.");
+                            }
+                            else
+                            {
+                                if (!Config.DryRun)
                                 {
-                                    var msg = await channel.SendPaginatedMessageAsync(embeds);
-                                    LiveMessageStorage.Save(msg.Id, 0);
+                                    bool allowAllStart = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                    bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAllStart || Config.AllowServerStartup.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                    
+                                    WriteLineWithPretext("show all Start: " + allowAllStart);
+                                    WriteLineWithPretext("show Start: " + showStart);
+                                    
+                                    bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                    bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuids[0], StringComparer.OrdinalIgnoreCase));
+                                    
+                                    WriteLineWithPretext("show all Stop: " + allowAllStop);
+                                    WriteLineWithPretext("show Stop: " + showStop);
+                                    
+                                    if (showStart && !showStop)
+                                    {
+                                        string? uuid = uuids[0];
+                                        var msg = await channel.SendPaginatedMessageAsync(embeds, uuid);
+                                        LiveMessageStorage.Save(msg.Id, 0);
+                                    }
+                                    if (!showStart && showStop)
+                                    {
+                                        string? uuid = uuids[0];
+                                        var msg = await channel.SendPaginatedMessageAsync(embeds, null, uuid);
+                                        LiveMessageStorage.Save(msg.Id, 0);
+                                    }
+                                    if (showStart && showStop)
+                                    {
+                                        string? uuid = uuids[0];
+                                        var msg = await channel.SendPaginatedMessageAsync(embeds, uuid, uuid);
+                                        LiveMessageStorage.Save(msg.Id, 0);
+                                    }
+                                    else
+                                    {
+                                        var msg = await channel.SendPaginatedMessageAsync(embeds);
+                                        LiveMessageStorage.Save(msg.Id, 0);
+                                    }
                                 }
                             }
                         }
@@ -404,11 +399,11 @@ internal static class Program
         if (Config.MessageFormat == MessageFormat.PerServer)
         {
             var serversList = GetServersList();
-            _serverInfo = serversList;
+            GlobalServerInfo = serversList;
             if (serversList.Count == 0)
             {
                 WriteLineWithPretext("No servers found on Pelican.", OutputType.Error);
-                return;
+                return Task.CompletedTask;
             }
             foreach (var server in serversList)
             {
@@ -424,69 +419,69 @@ internal static class Program
                     async (embedObj, uuid) =>
                     {
                         if (embedObj is not DiscordEmbed embed) return;
-                        var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.PaginatedLiveStore?.LastOrDefault().Key);
-
-                        if (tracked != null)
+                        if (EmbedHasChanged(uuid, embed))
                         {
-                            var msg = await channel.GetMessageAsync((ulong)tracked);
-                            if (EmbedHasChanged(uuid, embed))
+                            foreach (var channelId in channelIds)
                             {
-                                if (Config.Debug)
-                                    WriteLineWithPretext($"Updating message {tracked}");
-                                
-                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                var channel = await client.GetChannelAsync(channelId);
+                                var tracked = LiveMessageStorage.Get(LiveMessageStorage.Cache?.LiveStore?.LastOrDefault(x => LiveMessageStorage.MessageExistsAsync([channel], x).Result));
 
-                                if (showStart)
+                                if (tracked != null && tracked != 0 && !Config.DryRun)
                                 {
-                                    await msg.ModifyAsync(mb =>
-                                    {
-                                        mb.WithEmbed(embed);
-                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
-                                    });
-                                }
-                                else
-                                {
+                                    var msg = await channel.GetMessageAsync((ulong)tracked);
+                                    if (Config.Debug)
+                                        WriteLineWithPretext($"Updating message {tracked}");
+                                    
+                                    bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                    bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                    
+                                    bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                    bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+
                                     await msg.ModifyAsync(mb =>
                                     {
                                         mb.WithEmbed(embed);
                                         mb.ClearComponents();
+                                        if (showStart)
+                                            mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
+                                        if (showStop)
+                                            mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Stop"));
                                     });
-                                }
-                            }
-                            else if (Config.Debug)
-                            {
-                                WriteLineWithPretext("Message has not changed. Skipping.");
-                            }
-                        }
-                        else
-                        {
-                            if (!Config.DryRun)
-                            {
-                                bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
-                                bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
-                                
-                                if (showStart)
-                                {
-                                    var msg = await channel.SendMessageAsync(mb =>
-                                    {
-                                        mb.WithEmbed(embed);
-                                        mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
-                                    });
-                                    LiveMessageStorage.Save(msg.Id);
                                 }
                                 else
                                 {
-                                    var msg = await channel.SendMessageAsync(embed);
-                                    LiveMessageStorage.Save(msg.Id);
+                                    if (!Config.DryRun)
+                                    {
+                                        bool allowAll = Config.AllowServerStartup == null || Config.AllowServerStartup.Length == 0 || string.Equals(Config.AllowServerStartup[0], "UUIDS HERE", StringComparison.Ordinal);
+                                        bool showStart = Config is { AllowUserServerStartup: true, IgnoreOfflineServers: false, AllowServerStartup: not null } && (allowAll || Config.AllowServerStartup.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                    
+                                        bool allowAllStop = Config.AllowServerStopping == null || Config.AllowServerStopping.Length == 0 || string.Equals(Config.AllowServerStopping[0], "UUIDS HERE", StringComparison.Ordinal);
+                                        bool showStop = Config is { AllowUserServerStopping: true, IgnoreOfflineServers: false, AllowServerStopping: not null } && (allowAllStop || Config.AllowServerStopping.Contains(uuid[0], StringComparer.OrdinalIgnoreCase));
+                                    
+                                        var msg = await channel.SendMessageAsync(mb =>
+                                        {
+                                            mb.WithEmbed(embed);
+                                            if (showStart)
+                                                mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Start"));
+                                            if (showStop)
+                                                mb.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, uuid[0]!, "Stop"));
+                                        });
+                                        LiveMessageStorage.Save(msg.Id);
+                                    }
                                 }
                             }
+                        }
+                        else if (Config.Debug)
+                        {
+                            WriteLineWithPretext("Message has not changed. Skipping.");
                         }
                     },
                     delaySeconds: Config.ServerUpdateInterval + Random.Shared.Next(0, 3) // randomized per-server delay
                 );
             }
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -517,12 +512,6 @@ internal static class Program
             }
         });
     }
-    
-    private static void AddRows(this DiscordMessageBuilder mb, IEnumerable<DiscordComponent> components)
-    {
-        foreach (var row in components.Chunk(5))
-            mb.AddComponents(row);
-    }
 
     /// <summary>
     /// Sends a paginated message
@@ -530,26 +519,19 @@ internal static class Program
     /// <param name="channel">Target channel</param>
     /// <param name="embeds">List of embeds to paginate</param>
     /// <returns>The discord message</returns>
-    private static async Task<DiscordMessage> SendPaginatedMessageAsync(this DiscordChannel channel, List<DiscordEmbed> embeds, string? uuid = null)
+    private static async Task<DiscordMessage> SendPaginatedMessageAsync(this DiscordChannel channel, List<DiscordEmbed> embeds, string? uuid = null, string? uuid2 = null)
     {
-        DiscordComponent[] buttons;
+        List<DiscordComponent> buttons =
+        [
+            new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous")
+        ];
         if (uuid != null)
         {
-            buttons =
-            [
-                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-                new DiscordButtonComponent(ButtonStyle.Primary, uuid, "Start"),
-                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-            ];
+            buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary,$"Start: {uuid}", "Start"));
+            if (uuid2 != null)
+                buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"Stop: {uuid2}", "Stop"));
         }
-        else
-        {
-            buttons =
-            [
-                new DiscordButtonComponent(ButtonStyle.Primary, "prev_page", "◀️ Previous"),
-                new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️")
-            ];
-        }
+        buttons.Add(new DiscordButtonComponent(ButtonStyle.Primary, "next_page", "Next ▶️"));
 
         var messageBuilder = new DiscordMessageBuilder()
             .WithEmbed(embeds[0])

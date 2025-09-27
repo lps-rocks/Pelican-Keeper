@@ -24,7 +24,7 @@ public class RconTesting
         }
 
         if (_secrets.ExternalServerIp != null)
-            await PelicanInterface.SendGameServerCommandRcon(_secrets.ExternalServerIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
+            await PelicanInterface.SendRconGameServerCommand(_secrets.ExternalServerIp, 7777, "YouSuck", "listplayers"); // should load these from the secrets file and the information provided by the pelican API
 
         if (ConsoleExt.ExceptionOccurred)
             Assert.Fail($"Test failed due to exception(s): {ConsoleExt.Exceptions}");

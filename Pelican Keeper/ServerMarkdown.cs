@@ -80,7 +80,7 @@ public static class ServerMarkdown
 
         if (Program.Config.JoinableIpDisplay)
         {
-            viewModel.IpAndPort = HelperClass.GetConnectableAddress(serverResponse);
+            viewModel.IpAndPort = HelperClass.GetReadableConnectableAddress(serverResponse);
         }
         
         if (Program.Config.PlayerCountDisplay)

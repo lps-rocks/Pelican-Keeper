@@ -49,6 +49,10 @@ public static class LiveMessageStorage
         {
             var json = File.ReadAllText(HistoryFilePath);
             Cache = JsonSerializer.Deserialize<LiveMessageJsonStorage>(json) ?? new LiveMessageJsonStorage();
+            foreach (var liveStore in Cache.LiveStore)
+            {
+                WriteLineWithPretext($"Cache contents: {liveStore}");
+            }
         }
         catch (Exception ex)
         {
@@ -110,52 +114,77 @@ public static class LiveMessageStorage
     }
     
     /// <summary>
-    /// Validates the cache and removes any messages that no longer exist in the channel.
+    /// Validates the cache and removes any messages that no longer exist in the configured channels.
     /// </summary>
     private static async Task ValidateCache()
     {
+        var channels = Program.TargetChannel;
+        bool haveChannels = channels is { Count: > 0 };
+
         if (Cache is { LiveStore: not null })
         {
             var filtered = await Cache.LiveStore
                 .ToAsyncEnumerable()
-                .WhereAwait(async x => Program.TargetChannel != null && await MessageExistsAsync(Program.TargetChannel, x))
+                .WhereAwait(async id =>
+                    haveChannels && await MessageExistsAsync(channels!, id))
                 .ToHashSetAsync();
             Cache.LiveStore = filtered;
         }
-        
+
         if (Cache is { PaginatedLiveStore: not null })
         {
             var filtered = await Cache.PaginatedLiveStore
                 .ToAsyncEnumerable()
-                .WhereAwait(async x => Program.TargetChannel != null && await MessageExistsAsync(Program.TargetChannel, x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value);
+                .WhereAwait(async kvp =>
+                    haveChannels && await MessageExistsAsync(channels!, kvp.Key))
+                .ToDictionaryAsync(kvp => kvp.Key, kvp => kvp.Value);
             Cache.PaginatedLiveStore = filtered;
         }
 
-        await File.WriteAllTextAsync(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        }));
+        await File.WriteAllTextAsync(
+            HistoryFilePath,
+            JsonSerializer.Serialize(Cache, new JsonSerializerOptions { WriteIndented = true })
+        );
     }
+
 
     /// <summary>
     /// Checks if a message exists in a channel.
     /// </summary>
-    /// <param name="channel">target channel</param>
+    /// <param name="channels">list of target channels</param>
     /// <param name="messageId">discord message ID</param>
     /// <returns>bool whether the message exists</returns>
-    private static async Task<bool> MessageExistsAsync(DiscordChannel channel, ulong messageId)
+    public static async Task<bool> MessageExistsAsync(List<DiscordChannel> channels, ulong messageId)
     {
-        try
+        if (channels is not { Count: > 0 }) return true;
+
+        foreach (var channel in channels)
         {
-            var msg = await channel.GetMessageAsync(messageId);
-            return msg != null;
+            try
+            {
+                var msg = await channel.GetMessageAsync(messageId);
+                if (msg != null) return true;
+            }
+            catch (DSharpPlus.Exceptions.NotFoundException)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext($"Message {messageId} not found in #{channel.Name}", OutputType.Warning);
+            }
+            catch (DSharpPlus.Exceptions.UnauthorizedException)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext($"No permission to read #{channel.Name}", OutputType.Warning);
+            }
+            catch (DSharpPlus.Exceptions.BadRequestException ex)
+            {
+                if (Program.Config.Debug)
+                    WriteLineWithPretext($"Bad request on #{channel.Name}: {ex.Message}", OutputType.Warning);
+            }
         }
-        catch (DSharpPlus.Exceptions.NotFoundException)
-        {
-            if (Program.Config.Debug)
-                WriteLineWithPretext("Message not found", OutputType.Warning);
-            return false;
-        }
+        
+        if (Program.Config.Debug)
+            WriteLineWithPretext($"Message {messageId} not found in any channel", OutputType.Error);
+        return false;
     }
     
     /// <summary>
@@ -166,6 +195,6 @@ public static class LiveMessageStorage
     public static ulong? Get(ulong? messageId)
     {
         if (Cache?.LiveStore == null || Cache.LiveStore.Count == 0 || messageId == null) return null;
-        return Cache.LiveStore?.First(x => x == messageId);
+        return Cache.LiveStore?.FirstOrDefault(x => x == messageId);
     }
 }

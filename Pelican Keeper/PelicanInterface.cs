@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Pelican_Keeper.Query_Services;
 using RestSharp;
 
 namespace Pelican_Keeper;
@@ -14,6 +16,9 @@ public static class PelicanInterface
     private static List<RconService> _rconServices = new();
     private static Dictionary<string, DateTime> _shutdownTracker = new();
 
+    /// <summary>
+    /// Gets the entire List of Eggs from the Pelican API
+    /// </summary>
     private static void GetEggList()
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/application/eggs");
@@ -70,6 +75,10 @@ public static class PelicanInterface
         }
     }
 
+    /// <summary>
+    /// Gets the Client Server List from the Pelican API, and gets the Network Allocations, and tracks the server for player count and automatic shutdown.
+    /// </summary>
+    /// <param name="serverInfos">List of ServerInfo</param>
     private static void GetServerAllocations(List<ServerInfo> serverInfos)
     {
         var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/?type=admin-all");
@@ -115,7 +124,7 @@ public static class PelicanInterface
                                         ConsoleExt.WriteLineWithPretext("No game communication configuration found. Skipping shutdown check.", ConsoleExt.OutputType.Warning);
                                     continue;
                                 }
-                                int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText, _gamesToMonitor.First(s => s.Game == serverInfo.Egg.Name).PlayerCountExtractRegex);
+                                int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText);
                                 if (Program.Config.Debug)
                                     ConsoleExt.WriteLineWithPretext("Player count: " + playerCount + " for server: " + serverInfo.Name);
                                 if (playerCount > 0)
@@ -194,6 +203,16 @@ public static class PelicanInterface
                     servers = servers.Where(s => s.Resources?.CurrentState.ToLower() != "offline" && s.Resources?.CurrentState.ToLower() != "missing").ToList();
                 }
                 
+                if (Program.Config.IgnoreInternalServers)
+                {
+                    if (Program.Config.InternalIpStructure != null)
+                    {
+                        string internalIpPattern = "^" + Regex.Escape(Program.Config.InternalIpStructure).Replace("\\*", "\\d+") + "$";
+                        servers = servers.Where(s => s.Allocations != null && s.Allocations.Any(a => Regex.IsMatch(a.Ip, internalIpPattern))).ToList();
+
+                    }
+                }
+                
                 if (Program.Config.LimitServerCount && Program.Config.MaxServerCount > 0)
                 {
                     if (Program.Config.ServersToDisplay != null && Program.Config.ServersToDisplay.Length > 0 && Program.Config.ServersToDisplay[0] != "UUIDS HERE")
@@ -245,36 +264,12 @@ public static class PelicanInterface
         
         GetServerAllocations(servers);
     }
-    
-    private static string? SendGameServerCommand(string? uuid, string command) //TODO: I need to figure out a way to extract to the current player count and the maximum player count out of the return string where the max player count can be optional
-    {
-        if (string.IsNullOrWhiteSpace(uuid))
-        {
-            ConsoleExt.WriteLineWithPretext("UUID is null or empty.", ConsoleExt.OutputType.Error);
-            return null;
-        }
-        
-        if (string.IsNullOrWhiteSpace(command))
-        {
-            ConsoleExt.WriteLineWithPretext("Command is null or empty.", ConsoleExt.OutputType.Error);
-            return null;
-        }
-        
-        var client = new RestClient(Program.Secrets.ServerUrl + "/api/client/servers/");
-        var request = new RestRequest($"{uuid}/command", Method.Post);
-        
-        request.AddHeader("Authorization", $"Bearer {Program.Secrets.ClientToken}");
-        request.AddHeader("Content-Type", "application/json");
 
-        var body = new { command = $"{command}" };
-        request.AddStringBody(JsonSerializer.Serialize(body), ContentType.Json);
-
-        var response = client.Execute(request);
-        if (Program.Config.Debug)
-            ConsoleExt.WriteLineWithPretext(response.Content);
-        return response.Content;
-    }
-
+    /// <summary>
+    /// Sends a Power command to the specified Server.
+    /// </summary>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="command">Command to send ("start", "stop", etc.)</param>
     public static void SendPowerCommand(string? uuid, string command)
     {
         if (string.IsNullOrWhiteSpace(uuid))
@@ -303,8 +298,16 @@ public static class PelicanInterface
             ConsoleExt.WriteLineWithPretext(response.Content);
     }
     
+    /// <summary>
+    /// Sends a RCON Server command to the Specified IP and Port
+    /// </summary>
+    /// <param name="ip">IP of the Server</param>
+    /// <param name="port">Port of the Server</param>
+    /// <param name="password">RCON Password of the Server</param>
+    /// <param name="command">Game command to send</param>
+    /// <returns>The response to the command that was sent</returns>
     // TODO: Generalize the connection protocol calls so I don't have to have separate methods for RCON and A2S and i can just generalize it with the ISendCommand interface.
-    public static async Task<string?> SendGameServerCommandRcon(string ip, int port, string password, string command)
+    public static async Task<string> SendRconGameServerCommand(string ip, int port, string password, string command, string? regexPattern = null)
     {
         RconService rcon = new RconService(ip, port, password);
         if (_rconServices.Any(x => x.Ip == ip && x.Port == port))
@@ -321,22 +324,56 @@ public static class PelicanInterface
 
         await rcon.Connect();
         
-        string response = await rcon.SendCommandAsync(command);
+        string response = await rcon.SendCommandAsync(command, regexPattern);
         
         _rconServices.Add(rcon);
         return response;
     }
 
-    public static async Task<string?> SendA2SRequest(string ip, int port)
+    /// <summary>
+    /// Sends a A2S(Steam Query) request to the specified IP and Port
+    /// </summary>
+    /// <param name="ip">IP of the Server</param>
+    /// <param name="port">Port of the Server</param>
+    /// <returns>The Response to the command that was sent</returns>
+    public static async Task<string> SendA2SRequest(string ip, int port)
     {
         A2SService a2S = new A2SService(ip, port);
         
         await a2S.Connect();
         string response = await a2S.SendCommandAsync();
+        a2S.Dispose();
         
         return response;
     }
 
+    public static async Task<string?> SendBedrockMinecraftRequest(string ip, int port)
+    {
+        BedrockMinecraftQueryService bedrockMinecraftQuery = new BedrockMinecraftQueryService(ip, port);
+        
+        await bedrockMinecraftQuery.Connect();
+        string response = await bedrockMinecraftQuery.SendCommandAsync();
+        bedrockMinecraftQuery.Dispose();
+
+        return response;
+    }
+    
+    public static async Task<string?> SendJavaMinecraftRequest(string ip, int port)
+    {
+        JavaMinecraftQueryService javaMinecraftQuery = new JavaMinecraftQueryService(ip, port);
+        
+        await javaMinecraftQuery.Connect();
+        string response = await javaMinecraftQuery.SendCommandAsync();
+        javaMinecraftQuery.Dispose();
+        
+        return response;
+    }
+
+    /// <summary>
+    /// Monitors a specified Server and getting the Player count, Max player count, and put that into a neat text
+    /// </summary>
+    /// <param name="serverInfo">The ServerInfo of the specific server</param>
+    /// <param name="json">Input JSON</param>
     private static void MonitorServers(ServerInfo serverInfo, string json)
     {
         if (_gamesToMonitor == null || _gamesToMonitor.Count == 0) return;
@@ -348,14 +385,13 @@ public static class PelicanInterface
                 ConsoleExt.WriteLineWithPretext("No monitoring configuration found for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
             return;
         }
-        ConsoleExt.WriteLineWithPretext($"Found Game to Monitor {serverToMonitor.Game}", ConsoleExt.OutputType.Warning);
-        ConsoleExt.WriteLineWithPretext($"Found Game's Max Player Count {serverToMonitor.MaxPlayerVariable}", ConsoleExt.OutputType.Warning);
+        ConsoleExt.WriteLineWithPretext($"Found Game to Monitor {serverToMonitor.Game}");
 
-        int maxPlayers = JsonHandler.ExtractMaxPlayerCount(json, serverInfo.Uuid, serverToMonitor.MaxPlayerVariable);
+        int maxPlayers = JsonHandler.ExtractMaxPlayerCount(json, serverInfo.Uuid, serverToMonitor.MaxPlayerVariable, serverToMonitor.MaxPlayer);
 
         if (serverInfo.PlayerCountText != null)
         {
-            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, maxPlayers);
         }
         switch (serverToMonitor.Protocol)
         {
@@ -372,9 +408,9 @@ public static class PelicanInterface
 
                 if (Program.Secrets.ExternalServerIp != null)
                 {
-                    ConsoleExt.WriteLineWithPretext("Sending A2S request to " + Program.Secrets.ExternalServerIp + ":" + queryPort + " for server " + serverInfo.Name);
-                    var a2SResponse = SendA2SRequest(Program.Secrets.ExternalServerIp, queryPort).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse ?? "No response from A2S query.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+                    ConsoleExt.WriteLineWithPretext($"Sending A2S request to {Program.Secrets.ExternalServerIp}:{queryPort} for server {serverInfo.Name}");
+                    var a2SResponse = SendA2SRequest(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse, maxPlayers);
                 }
 
                 return;
@@ -386,24 +422,58 @@ public static class PelicanInterface
                 
                 if (rconPort == 0 || string.IsNullOrWhiteSpace(rconPassword))
                 {
-                    ConsoleExt.WriteLineWithPretext("No RCON port or password found for server: " + serverInfo.Name, ConsoleExt.OutputType.Warning);
+                    ConsoleExt.WriteLineWithPretext($"No RCON port or password found for server: {serverInfo.Name}", ConsoleExt.OutputType.Warning);
                     return;
                 }
                 
                 if (Program.Secrets.ExternalServerIp != null && serverToMonitor.Command != null)
                 {
-                    var rconResponse = SendGameServerCommandRcon(Program.Secrets.ExternalServerIp, rconPort, rconPassword, serverToMonitor.Command).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse ?? "No response from RCON command.", serverToMonitor.PlayerCountExtractRegex, maxPlayers.ToString());
+                    var rconResponse = SendRconGameServerCommand(GetCorrectIp(serverInfo), rconPort, rconPassword, serverToMonitor.Command, _gamesToMonitor.First(s => s.Game == serverInfo.Egg.Name).PlayerCountExtractRegex).GetAwaiter().GetResult();
+                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(rconResponse, maxPlayers);
                 }
                 
                 break;
             }
-            case CommandExecutionMethod.PelicanApi:
+            case CommandExecutionMethod.MinecraftJava:
             {
-                if (serverToMonitor.Command != null)
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverInfo.Uuid, serverToMonitor.QueryPortVariable);
+                
+                if (Program.Secrets.ExternalServerIp != null && queryPort != 0)
                 {
-                    var pelicanResponse = SendGameServerCommand(serverInfo.Uuid, serverToMonitor.Command);
-                    serverInfo.PlayerCountText = pelicanResponse ?? "Command sent via Pelican API.";
+                    var minecraftResponse = SendJavaMinecraftRequest(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
+                    if (Program.Config.Debug)
+                    {
+                        ConsoleExt.WriteLineWithPretext($"Sent Java Minecraft Query to Serer and Port: {Program.Secrets.ExternalServerIp}:{queryPort}");
+                        ConsoleExt.WriteLineWithPretext($"Java Minecraft Response: {minecraftResponse}");
+                    }
+                    serverInfo.PlayerCountText = minecraftResponse;
+                }
+                else
+                {
+                    if (Program.Config.Debug)
+                        ConsoleExt.WriteLineWithPretext("ExternalServerIp or Query Port is null or empty", ConsoleExt.OutputType.Error);
+                }
+                
+                break;
+            }
+            case CommandExecutionMethod.MinecraftBedrock:
+            {
+                int queryPort = JsonHandler.ExtractQueryPort(json, serverInfo.Uuid, serverToMonitor.QueryPortVariable);
+                
+                if (Program.Secrets.ExternalServerIp != null && queryPort != 0)
+                {
+                    var minecraftResponse = SendBedrockMinecraftRequest(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
+                    if (Program.Config.Debug)
+                    {
+                        ConsoleExt.WriteLineWithPretext($"Sent Bedrock Minecraft Query to Serer and Port: {Program.Secrets.ExternalServerIp}:{queryPort}");
+                        ConsoleExt.WriteLineWithPretext($"Bedrock Minecraft Response: {minecraftResponse}");
+                    }
+                    serverInfo.PlayerCountText = minecraftResponse;
+                }
+                else
+                {
+                    if (Program.Config.Debug)
+                        ConsoleExt.WriteLineWithPretext("ExternalServerIp or Query Port is null or empty", ConsoleExt.OutputType.Error);
                 }
                 
                 break;
@@ -411,7 +481,10 @@ public static class PelicanInterface
         }
     }
     
-    public static void GetServersToMonitorFileAsync()
+    /// <summary>
+    /// Runs a Task to continuously get the GamesToMonitor File if continuous reading is enabled.
+    /// </summary>
+    public static void GetGamesToMonitorFileAsync()
     {
         Task.Run(async () =>
         {

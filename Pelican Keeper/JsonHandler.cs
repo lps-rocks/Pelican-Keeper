@@ -4,8 +4,13 @@ using static Pelican_Keeper.TemplateClasses;
 
 namespace Pelican_Keeper;
 
-public class JsonHandler
+public static class JsonHandler
 {
+    /// <summary>
+    /// Extracts a list of Eggs from the input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <returns>List of EggInfo that includes the ID and Name</returns>
     internal static List<EggInfo> ExtractEggInfo(string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -32,6 +37,13 @@ public class JsonHandler
         return eggs;
     }
     
+    /// <summary>
+    /// Extracts the RCON Port from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="variableName">Variable Name of the RCON Port in the Pelican Panel</param>
+    /// <returns>The RCON port if found or 0 if not found</returns>
     internal static int ExtractRconPort(string json, string uuid, string? variableName)
     {
         if (variableName != null)
@@ -80,6 +92,13 @@ public class JsonHandler
         return rconPort;
     }
     
+    /// <summary>
+    /// Extracts the RCON Password from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="variableName">Variable Name of the RCON Password in the Pelican Panel</param>
+    /// <returns>String of The Password if found or Empty string if not found</returns>
     internal static string ExtractRconPassword(string json, string uuid, string? variableName)
     {
         if (variableName == null || variableName.Trim() == string.Empty)
@@ -115,6 +134,13 @@ public class JsonHandler
         return rconPassword;
     }
     
+    /// <summary>
+    /// Extracts the Query Port from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="variableName">Variable Name of the Query Port in the Pelican Panel</param>
+    /// <returns>The Query port if found or 0 if not found</returns>
     internal static int ExtractQueryPort(string json, string uuid, string? variableName)
     {
         if (variableName != null)
@@ -162,9 +188,25 @@ public class JsonHandler
 
         return queryPort;
     }
-    
-    public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName)
+
+    /// <summary>
+    /// Extracts the max player count from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <param name="uuid">UUID of the Server</param>
+    /// <param name="variableName">Variable Name of the Max Player Count in the Pelican Panel</param>
+    /// <param name="maxPlayer">Optional! if max player is set, it uses that instead of the variable</param>
+    /// <returns>The Max Player Count if found or 0 if not found</returns>
+    public static int ExtractMaxPlayerCount(string json, string uuid, string? variableName, string? maxPlayer)
     {
+        if (!string.IsNullOrEmpty(maxPlayer))
+        {
+            if (int.TryParse(maxPlayer, out int intMaxPlayers))
+            {
+                return intMaxPlayers;
+            }
+        }
+        
         if (variableName == null || variableName.Trim() == string.Empty)
         {
             variableName = "MAX_PLAYERS";
@@ -195,6 +237,12 @@ public class JsonHandler
         return maxPlayers;
     }
 
+    /// <summary>
+    /// Extracts the Network Allocations from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <param name="serverUuid">Optional! UUID of the server you want to extract the Network allocations from</param>
+    /// <returns>List of ServerAlocation</returns>
     internal static List<ServerAllocation> ExtractNetworkAllocations(string json, string? serverUuid = null)
     {
         using var doc = JsonDocument.Parse(json);
@@ -233,6 +281,11 @@ public class JsonHandler
         return allocations;
     }
     
+    /// <summary>
+    /// Extracts the Server List from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <returns>List of ServerInfo of the extracted Servers</returns>
     internal static List<ServerInfo> ExtractServerListInfo(string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -263,6 +316,11 @@ public class JsonHandler
         return serverInfo;
     }
     
+    /// <summary>
+    /// Extracts the Server Resources from the Input JSON
+    /// </summary>
+    /// <param name="json">Input JSON</param>
+    /// <returns>Server Resources of that Server</returns>
     internal static ServerResources ExtractServerResources(string json)
     {
         using var doc = JsonDocument.Parse(json);
