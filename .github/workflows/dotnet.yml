@@ -41,7 +41,6 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -60,52 +59,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rid:
-          - win-x86
-          - win-x64
-          - linux-x64
-          - linux-arm64
-          - osx-x64
-          - osx-arm64
+        rid: [win-x86, win-x64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+    env:
+      PROJECT_PATH: "Pelican Keeper/Pelican Keeper.csproj"
+      APP_NAME: "Pelican-Keeper"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Detect solution
-        id: detect
-        run: |
-          set -e
-          SOLN=$(ls -1 *.sln 2>/dev/null | head -n1)
-          if [ -z "$SOLN" ]; then
-            echo "No .sln found at repo root. Place the workflow at the root or add a step to cd into the directory with your solution." >&2
-            exit 1
-          fi
-          echo "sln=$SOLN" >> "$GITHUB_OUTPUT"
-          echo "Found solution: $SOLN"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.x'
 
-      - name: Restore
-        run: dotnet restore "${{ steps.detect.outputs.sln }}"
-
-      - name: Build
-        run: dotnet build --no-restore "${{ steps.detect.outputs.sln }}"
+      - name: Restore (per RID)
+        run: dotnet restore "$PROJECT_PATH" -r ${{ matrix.rid }}
 
       - name: Publish (${{ matrix.rid }})
         run: |
           OUTDIR="dist/${{ matrix.rid }}"
           mkdir -p "$OUTDIR"
-          dotnet publish "${{ steps.detect.outputs.sln }}" \
+          dotnet publish "$PROJECT_PATH" \
             -c Release -r ${{ matrix.rid }} --no-restore --nologo \
+            -p:PublishSingleFile=true -p:SelfContained=true -p:EnableCompressionInSingleFile=true \
             -o "$OUTDIR"
           echo "OUTDIR=$OUTDIR" >> "$GITHUB_ENV"
 
       - name: Zip publish output (${{ matrix.rid }})
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          NAME="release-v${VERSION}-${{ matrix.rid }}.zip"
+          NAME="${{ env.APP_NAME }}-v${VERSION}-${{ matrix.rid }}.zip"
           cd "$OUTDIR"
           zip -r "../$NAME" .
           echo "ZIP=dist/$NAME" >> $GITHUB_ENV
