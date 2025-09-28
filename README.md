@@ -107,14 +107,9 @@ dotnet run --project "Pelican Keeper"
 > This file is used to configure how the bot behaves and displays information in Discord.
 > You can edit this file to change the bot's behavior, changing it while the bot is running will not apply the changes until the next restart.
 
-The config.json file can be found in the installation folder, and for the moment you have two options
+The config.json file can be found in the installation folder, and the structure and what each setting does is explained
+in the [Wiki](https://github.com/SirZeeno/Pelican-Keeper/wiki/Bot-Config)
 
-```
-{
-  "ConsolidateEmbeds": true,
-  "Paginate": false
-}
-```
 ### ConsolidateEmbeds
 
 > Consolidate all the server information into a single embed message if true. And if false, it will create an embed message for each game server you have on pelican.
