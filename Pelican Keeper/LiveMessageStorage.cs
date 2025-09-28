@@ -181,6 +181,8 @@ public static class LiveMessageStorage
                     WriteLineWithPretext($"Bad request on #{channel.Name}: {ex.Message}", OutputType.Warning);
             }
         }
+
+        if (channels.Count == 1) return false; // I am searching only one channel, so I don't need to log.
         
         if (Program.Config.Debug)
             WriteLineWithPretext($"Message {messageId} not found in any channel", OutputType.Error);

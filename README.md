@@ -10,7 +10,7 @@
 A Discord bot that will display the status of your Pelican Game Servers in a Discord Channel
 
 > [!CAUTION]
-> The Secrets File has been changed to accomidate multi-channel messaging, Look at the JSON structure below where you'll see the new structure!
+> The Secrets File has been changed to accommodate multichannel messaging, Look at the JSON structure below where you'll see the new structure!
 
 This Discord bot is a basic compile-and-run bot built in .NET 8.0.
 > [!TIP]

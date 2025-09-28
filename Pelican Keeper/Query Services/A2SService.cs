@@ -101,7 +101,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         }
         catch (SocketException ex)
         {
-            ConsoleExt.WriteLineWithPretext($"No response from server.", ConsoleExt.OutputType.Error, ex);
+            ConsoleExt.WriteLineWithPretext("No response from server.", ConsoleExt.OutputType.Error, ex);
             return null;
         }
     }
