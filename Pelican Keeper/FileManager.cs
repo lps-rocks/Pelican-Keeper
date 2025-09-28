@@ -26,7 +26,6 @@ public static class FileManager
         }
         
         WriteLineWithPretext($"Couldn't find {fileNameWithExtension} file in program directory!", OutputType.Error, new FileNotFoundException());
-        Environment.Exit(20);
         return string.Empty;
     }
 
@@ -110,6 +109,7 @@ public static class FileManager
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load secrets. Check that the Secrets file is filled out and is in the correct format. Check Secrets.json", OutputType.Error, ex);
+            Thread.Sleep(TimeSpan.FromSeconds(5));
             Environment.Exit(1);
             return null;
         }
@@ -141,6 +141,7 @@ public static class FileManager
         catch (Exception ex)
         {
             WriteLineWithPretext("Failed to load config. Check if nothing is misspelled and you used the correct options", OutputType.Error, ex);
+            Thread.Sleep(TimeSpan.FromSeconds(5));
             Environment.Exit(1);
             return null;
         }
@@ -148,6 +149,7 @@ public static class FileManager
         if (config == null)
         {
             WriteLineWithPretext("Config file is empty or not in the correct format. Please check Config.json", OutputType.Error);
+            Thread.Sleep(TimeSpan.FromSeconds(5));
             Environment.Exit(1);
             return null;
         }
