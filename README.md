@@ -85,25 +85,13 @@ dotnet run --project "Pelican Keeper"
 > [!WARNING]
 > Make sure you fill out the Secrets.json file found in the bot install directory, otherwise the bot **WILL NOT** work!
 
-**Secrets.json Structure**
-```
-{
-  "ClientToken": "YOUR_CLIENT_TOKEN",
-  "ServerToken": "YOUR_SERVER_TOEKN",
-  "ServerUrl": "YOUR_BASIC_SERVER_URL",
-  "BotToken": "YOUR_DISCORD_BOT_TOKEN",
-  "ChannelIds": [THE_CHANNELID_YOU_WANT_THE_BOT_TO_POST_IN],
-  "ExternalServerIP": "YOUR_EXTERNAL_SERVER_IP"
-}
-```
-> The ExternalServerIP variable is optional and is used to display the server's public IP alongside the primary game server port. This provides a visible, joinable IP address as part of the server information.
+The Secrets file will be created on first startup if it does not exist. The structure of the file and what each Variable is for can be found in the [Wiki](https://github.com/SirZeeno/Pelican-Keeper/wiki/Bot-Secrets)
 
 ## Configuration
 
 ### Config File
 
 > [!TIP]
-> The Config file can be found in [here](https://github.com/SirZeeno/Pelican-Keeper/blob/main/Pelican%20Keeper/Config.json).
 > This file is used to configure how the bot behaves and displays information in Discord.
 > You can edit this file to change the bot's behavior, changing it while the bot is running will not apply the changes until the next restart.
 

@@ -67,6 +67,11 @@ public static class LiveMessageStorage
     /// <param name="messageId">discord message ID</param>
     public static void Save(ulong messageId)
     {
+        if (Get(messageId) != null)
+        {
+            return;
+        }
+        
         Cache?.LiveStore?.Add(messageId);
         File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
@@ -83,6 +88,7 @@ public static class LiveMessageStorage
     {
         if (Cache is { PaginatedLiveStore: not null } && Cache.PaginatedLiveStore.ContainsKey(messageId))
         {
+            if (Cache.PaginatedLiveStore[messageId] == currentPageIndex) return;
             Cache.PaginatedLiveStore[messageId] = currentPageIndex;
         }
         else

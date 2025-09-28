@@ -82,7 +82,7 @@ public static class FileManager
         
         if (secretsPath == String.Empty)
         {
-            Console.WriteLine("Secrets.json not found. Pulling Default from Github!");
+            Console.WriteLine("Secrets.json not found. Creating default one.");
             await CreateSecretsFile();
             return null;
         }
