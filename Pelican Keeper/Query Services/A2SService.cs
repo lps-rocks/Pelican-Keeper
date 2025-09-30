@@ -32,7 +32,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         if (first == null)
         {
             ConsoleExt.WriteLineWithPretext("Timed out waiting for server response.", ConsoleExt.OutputType.Error);
-            return HelperClass.ExtractPlayerCount("Timeout or no response").ToString();
+            return HelperClass.ServerPlayerCountDisplayCleanup(string.Empty);
         }
 
         if (Program.Config.Debug)
@@ -62,7 +62,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
                 if (second == null)
                 {
                     ConsoleExt.WriteLineWithPretext("Timed out waiting for challenged info response.", ConsoleExt.OutputType.Error);
-                    return HelperClass.ExtractPlayerCount("Timeout or no response").ToString();
+                    return HelperClass.ServerPlayerCountDisplayCleanup(string.Empty);
                 }
 
                 if (Program.Config.Debug)
@@ -71,12 +71,12 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
                     DumpBytes(second);
                 }
 
-                return HelperClass.ExtractPlayerCount(ParseOrFail(second)).ToString();
+                return ParseOrFail(second);
             }
             // 0x49 = 'I' = S2A_INFO (immediate info response, no challenge)
             if (header == 0x49)
             {
-                return HelperClass.ExtractPlayerCount(ParseOrFail(first)).ToString();
+                return ParseOrFail(first);
             }
 
             // Some servers may reply multi-packet (0xFE) or other types, but I will treat them as unsupported for now
@@ -85,7 +85,7 @@ public class A2SService(string ip, int port) : ISendCommand, IDisposable
         }
 
         ConsoleExt.WriteLineWithPretext("Invalid or unexpected response.", ConsoleExt.OutputType.Error);
-        return HelperClass.ExtractPlayerCount("Failed to parse response.").ToString();
+        return HelperClass.ServerPlayerCountDisplayCleanup(string.Empty);
     }
 
     private static async Task<byte[]?> ReceiveWithTimeoutAsync(UdpClient udp, int timeoutMs)

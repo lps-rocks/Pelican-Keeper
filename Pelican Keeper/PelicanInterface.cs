@@ -114,7 +114,7 @@ public static class PelicanInterface
                                 if (Program.Config.ServersToAutoShutdown != null && Program.Config.ServersToAutoShutdown[0] != "UUIDS HERE" && !Program.Config.ServersToAutoShutdown.Contains(serverInfo.Uuid))
                                 {
                                     if (Program.Config.Debug)
-                                        ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is not in the auto-shutdown list. Skipping shutdown check.");
+                                        ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} is not in the auto-shutdown list. Skipping shutdown check.");
                                     continue;
                                 }
                                 
@@ -126,7 +126,7 @@ public static class PelicanInterface
                                 }
                                 int playerCount = ExtractPlayerCount(serverInfo.PlayerCountText);
                                 if (Program.Config.Debug)
-                                    ConsoleExt.WriteLineWithPretext("Player count: " + playerCount + " for server: " + serverInfo.Name);
+                                    ConsoleExt.WriteLineWithPretext($"Player count: {playerCount} for server: {serverInfo.Name}");
                                 if (playerCount > 0)
                                 {
                                     _shutdownTracker[serverInfo.Uuid] = DateTime.Now;
@@ -142,7 +142,7 @@ public static class PelicanInterface
                                         ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} has been empty for over an hour. Sending shutdown command.");
                                         _shutdownTracker.Remove(serverInfo.Uuid);
                                         if (Program.Config.Debug)
-                                            ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is stopping and removed from shutdown tracker.");
+                                            ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} is stopping and removed from shutdown tracker.");
                                     }
                                 }
                             }
@@ -152,7 +152,7 @@ public static class PelicanInterface
                     {
                         _shutdownTracker.Remove(serverInfo.Uuid);
                         if (Program.Config.Debug)
-                            ConsoleExt.WriteLineWithPretext("Server " + serverInfo.Name + " is offline or stopping. Removed from shutdown tracker.");
+                            ConsoleExt.WriteLineWithPretext($"Server {serverInfo.Name} is offline or stopping. Removed from shutdown tracker.");
                     }
                 }
                 return;
@@ -388,11 +388,7 @@ public static class PelicanInterface
         ConsoleExt.WriteLineWithPretext($"Found Game to Monitor {serverToMonitor.Game}");
 
         int maxPlayers = JsonHandler.ExtractMaxPlayerCount(json, serverInfo.Uuid, serverToMonitor.MaxPlayerVariable, serverToMonitor.MaxPlayer);
-
-        if (serverInfo.PlayerCountText != null)
-        {
-            serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(serverInfo.PlayerCountText, maxPlayers);
-        }
+        
         switch (serverToMonitor.Protocol)
         {
             case CommandExecutionMethod.A2S:
@@ -410,7 +406,7 @@ public static class PelicanInterface
                 {
                     ConsoleExt.WriteLineWithPretext($"Sending A2S request to {Program.Secrets.ExternalServerIp}:{queryPort} for server {serverInfo.Name}");
                     var a2SResponse = SendA2SRequest(GetCorrectIp(serverInfo), queryPort).GetAwaiter().GetResult();
-                    serverInfo.PlayerCountText = ServerPlayerCountDisplayCleanup(a2SResponse, maxPlayers);
+                    serverInfo.PlayerCountText = a2SResponse;
                 }
 
                 return;

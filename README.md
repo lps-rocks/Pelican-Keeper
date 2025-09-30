@@ -60,9 +60,9 @@ Run the bot once or create the Secrets.json in the base directory you see when o
 
 ### Get The Latest Release
 
-Download the latest release with this command. This command downloads the latest release, unzips it, and removes the zip file.
+Download the latest release with this command. This command downloads the latest release for your specific platform, unzips it, and removes the zip file.
 ```
-curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/Release.zip && unzip Release.zip && rm Release.zip
+curl -L https://github.com/SirZeeno/Pelican-Keeper/releases/latest/download/[Your_Platform_Version].zip && unzip [Your_Platform_Version].zip && rm [Your_Platform_Version].zip
 ```
 
 ### Run the Bot
