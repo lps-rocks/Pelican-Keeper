@@ -208,7 +208,7 @@ public static class PelicanInterface
                     if (Program.Config.InternalIpStructure != null)
                     {
                         string internalIpPattern = "^" + Regex.Escape(Program.Config.InternalIpStructure).Replace("\\*", "\\d+") + "$";
-                        servers = servers.Where(s => s.Allocations != null && s.Allocations.Any(a => Regex.IsMatch(a.Ip, internalIpPattern))).ToList();
+                        servers = servers.Where(s => s.Allocations != null && s.Allocations.Any(a => !Regex.IsMatch(a.Ip, internalIpPattern))).ToList();
 
                     }
                 }

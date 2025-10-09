@@ -461,5 +461,10 @@
     "Game": "The Forest",
     "Protocol": "A2S",
     "QueryPortVariable": "QUERY_PORT"
+  },
+  {
+    "Game": "Garry's Mod - Reworked",
+    "Protocol": "A2S",
+    "QueryPortVariable": "SERVER_PORT"
   }
 ]
