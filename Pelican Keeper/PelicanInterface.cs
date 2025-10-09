@@ -11,7 +11,7 @@ using static HelperClass;
 
 public static class PelicanInterface
 {
-    private static List<GamesToMonitor>? _gamesToMonitor;
+    private static List<GamesToMonitor>? _gamesToMonitor = FileManager.ReadGamesToMonitorFile().GetAwaiter().GetResult();
     private static List<EggInfo>? _eggsList;
     private static List<RconService> _rconServices = new();
     private static Dictionary<string, DateTime> _shutdownTracker = new();
