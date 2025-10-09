@@ -1,5 +1,5 @@
 ﻿using System.Collections;
-using System.Collections.ObjectModel;
+using System.Text;
 
 
 namespace Pelican_Keeper;
@@ -31,13 +31,17 @@ public static class ConsoleExt
     {
         var length1 = CurrentTime();
         var length2 = DetermineOutputType(outputType);
-        if (output is IEnumerable enumerable && !(output is string))
+        switch (output)
         {
-            Console.WriteLine(string.Join(", ", enumerable.Cast<object>()));
-        }
-        else
-        {
-            Console.WriteLine(output);
+            case string str:
+                Console.WriteLine(str.Normalize(NormalizationForm.FormKD));
+                break;
+            case IEnumerable enumerable when !(output is string):
+                Console.WriteLine(string.Join(", ", enumerable.Cast<object>()));
+                break;
+            default:
+                Console.WriteLine(output);
+                break;
         }
 
         if (exception == null) return length1 + length2;
@@ -60,13 +64,17 @@ public static class ConsoleExt
     {
         var length1 = CurrentTime();
         var length2 = DetermineOutputType(outputType);
-        if (output is IEnumerable enumerable && !(output is string))
+        switch (output)
         {
-            Console.WriteLine(string.Join(", ", enumerable.Cast<object>()));
-        }
-        else
-        {
-            Console.Write(output);
+            case string str:
+                Console.WriteLine(str.Normalize(NormalizationForm.FormKD));
+                break;
+            case IEnumerable enumerable when !(output is string):
+                Console.WriteLine(string.Join(", ", enumerable.Cast<object>()));
+                break;
+            default:
+                Console.WriteLine(output);
+                break;
         }
 
         if (exception == null) return length1 + length2;

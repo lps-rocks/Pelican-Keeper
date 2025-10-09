@@ -67,6 +67,11 @@ public static class LiveMessageStorage
     /// <param name="messageId">discord message ID</param>
     public static void Save(ulong messageId)
     {
+        if (Get(messageId) != null)
+        {
+            return;
+        }
+        
         Cache?.LiveStore?.Add(messageId);
         File.WriteAllText(HistoryFilePath, JsonSerializer.Serialize(Cache, new JsonSerializerOptions
         {
@@ -83,6 +88,7 @@ public static class LiveMessageStorage
     {
         if (Cache is { PaginatedLiveStore: not null } && Cache.PaginatedLiveStore.ContainsKey(messageId))
         {
+            if (Cache.PaginatedLiveStore[messageId] == currentPageIndex) return;
             Cache.PaginatedLiveStore[messageId] = currentPageIndex;
         }
         else
@@ -181,6 +187,8 @@ public static class LiveMessageStorage
                     WriteLineWithPretext($"Bad request on #{channel.Name}: {ex.Message}", OutputType.Warning);
             }
         }
+
+        if (channels.Count == 1) return false; // I am searching only one channel, so I don't need to log.
         
         if (Program.Config.Debug)
             WriteLineWithPretext($"Message {messageId} not found in any channel", OutputType.Error);

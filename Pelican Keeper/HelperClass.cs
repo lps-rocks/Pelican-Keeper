@@ -141,16 +141,30 @@ public static class HelperClass
         var playerMaxPlayer = Regex.Match(serverResponse, @"^(\d+)\/\d+$");
         if (playerMaxPlayer.Success && int.TryParse(playerMaxPlayer.Groups[1].Value, out var playerCount))
         {
+            ConsoleExt.WriteLineWithPretext($"Player count extracted using standard format: {playerCount}");
             return playerCount;
         }
         
         var arkRconPlayerList = Regex.Match(serverResponse, @"(\d+)\.\s*([^,]+),\s*(.+)$", RegexOptions.Multiline);
         if (arkRconPlayerList.Success)
+        {
+            ConsoleExt.WriteLineWithPretext($"Player count extracted using Ark format: {arkRconPlayerList.Length}");
             return arkRconPlayerList.Length;
+        }
 
         var palworldPlayerList = Regex.Match(serverResponse, @"^(?!name,).+$", RegexOptions.Multiline);
-        if (palworldPlayerList.Success || serverResponse.Contains("name,playeruid,steamid"))
+        if (palworldPlayerList.Success && serverResponse.Contains("name,playeruid,steamid"))
+        {
+            ConsoleExt.WriteLineWithPretext($"Player count extracted using Palworld format: {palworldPlayerList.Length}");
             return palworldPlayerList.Length;
+        }
+        
+        var factorioPlayerList = Regex.Match(serverResponse, @"Online players \((\d+)\):");
+        if (factorioPlayerList.Success && int.TryParse(factorioPlayerList.Groups[1].Value, out var factorioPlayerCount))
+        {
+            ConsoleExt.WriteLineWithPretext($"Player count extracted using Factorio format: {factorioPlayerCount}");
+            return factorioPlayerCount;
+        }
         
         // Custom User-defined regex pattern
         if (regexPattern != null)
@@ -160,7 +174,7 @@ public static class HelperClass
             {
                 if (!Int32.TryParse(customMatch.Value, out var count)) return count;
                 if (Program.Config.Debug)
-                    ConsoleExt.WriteLineWithPretext($"Custom Regex Returned: {count}");
+                    ConsoleExt.WriteLineWithPretext($"Player count returned by Custom Regex: {count}");
                 return count;
             }
         }
