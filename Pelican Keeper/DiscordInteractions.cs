@@ -239,14 +239,15 @@ public class DiscordInteractions
                 if (serverInfo != null)
                 {
                     await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
-                        
-                    PelicanInterface.SendPowerCommand(serverInfo.Uuid, "stop");
-                        
-                    await e.Interaction.CreateFollowupMessageAsync(
-                        new DiscordFollowupMessageBuilder()
-                            .WithContent($"▶️ Starting server `{serverInfo.Name}`…")
-                            .AsEphemeral()
-                    );
+                    if (serverInfo.Resources?.CurrentState.ToLower() == "offline") {
+                        PelicanInterface.SendPowerCommand(serverInfo.Uuid, "start");
+                    
+                        await e.Interaction.CreateFollowupMessageAsync(
+                            new DiscordFollowupMessageBuilder()
+                                .WithContent($"▶️ Starting server `{serverInfo.Name}`…")
+                                .AsEphemeral()
+                        );
+                    }
                 }
                 break;
             }
@@ -257,14 +258,15 @@ public class DiscordInteractions
                 if (serverInfo != null)
                 {
                     await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
-                        
-                    PelicanInterface.SendPowerCommand(serverInfo.Uuid, "start");
-                        
-                    await e.Interaction.CreateFollowupMessageAsync(
-                        new DiscordFollowupMessageBuilder()
-                            .WithContent($"⏹ Stopping server `{serverInfo.Name}`…")
-                            .AsEphemeral()
-                    );
+                    if (serverInfo.Resources?.CurrentState.ToLower() == "online") {
+                        PelicanInterface.SendPowerCommand(serverInfo.Uuid, "stop");
+                            
+                        await e.Interaction.CreateFollowupMessageAsync(
+                            new DiscordFollowupMessageBuilder()
+                                .WithContent($"⏹ Stopping server `{serverInfo.Name}`…")
+                                .AsEphemeral()
+                        );
+                    }
                 }
                 break;
             }
