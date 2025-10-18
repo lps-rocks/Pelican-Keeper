@@ -247,6 +247,12 @@ public class DiscordInteractions
                                 .WithContent($"▶️ Starting server `{serverInfo.Name}`…")
                                 .AsEphemeral()
                         );
+                    } else {
+                        await e.Interaction.CreateFollowupMessageAsync(
+                            new DiscordFollowupMessageBuilder()
+                                .WithContent($"▶️ Server already Running `{serverInfo.Name}`…")
+                                .AsEphemeral()
+                        );
                     }
                 }
                 break;
@@ -264,6 +270,12 @@ public class DiscordInteractions
                         await e.Interaction.CreateFollowupMessageAsync(
                             new DiscordFollowupMessageBuilder()
                                 .WithContent($"⏹ Stopping server `{serverInfo.Name}`…")
+                                .AsEphemeral()
+                        );
+                    } else {
+                        await e.Interaction.CreateFollowupMessageAsync(
+                            new DiscordFollowupMessageBuilder()
+                                .WithContent($"⏹ Server already Stopped `{serverInfo.Name}`…")
                                 .AsEphemeral()
                         );
                     }
