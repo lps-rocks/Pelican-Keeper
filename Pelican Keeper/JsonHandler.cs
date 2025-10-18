@@ -301,11 +301,13 @@ public static class JsonHandler
             var uuid = server.GetProperty("attributes").GetProperty("uuid").GetString() ?? string.Empty;
             var name = server.GetProperty("attributes").GetProperty("name").GetString() ?? string.Empty;
             var egg = server.GetProperty("attributes").GetProperty("egg").GetInt32();
+            var description = server.GetProperty("attributes").GetProperty("description").GetString() ?? string.Empty;
             
             serverInfo.Add(new ServerInfo {
                 Id = id,
                 Uuid = uuid,
                 Name = name,
+                Description = description,
                 Egg = new EggInfo
                 {
                     Id = egg
