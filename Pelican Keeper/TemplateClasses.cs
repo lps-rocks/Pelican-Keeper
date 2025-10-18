@@ -131,6 +131,7 @@ public abstract class TemplateClasses
         public string PlayerCount { get; set; } = null!;
         public string IpAndPort { get; set; } = null!;
         public string? Uuid { get; set; }
+        public string Description { get; init; } = null!;
         public string ServerName { get; init; } = null!;
         public string Status { get; set; } = null!;
         public string StatusIcon { get; set; } = null!;
