@@ -69,6 +69,7 @@ public static class ServerMarkdown
             Uuid = serverResponse.Uuid,
             ServerName = serverResponse.Name,
             Status = serverResponse.Resources.CurrentState,
+            Description = serverResponse.Description,
             StatusIcon = EmbedBuilderHelper.GetStatusIcon(serverResponse.Resources.CurrentState),
             Cpu = $"{serverResponse.Resources.CpuAbsolute:0.00}%",
             Memory = EmbedBuilderHelper.FormatBytes(serverResponse.Resources.MemoryBytes),
