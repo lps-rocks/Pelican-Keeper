@@ -46,7 +46,7 @@ public class EmbedBuilderService
         for (int i = 0; i < servers.Count && embed.Fields.Count < 25; i++)
         {
             var serverInfo = ServerMarkdown.ParseTemplate(servers[i]);
-            embed.AddField(serverInfo.serverName, serverInfo.message, inline: true);
+            embed.AddField(serverInfo.serverName, serverInfo.message, inline: false);
             
             if (Program.Config.DryRun)
             {
