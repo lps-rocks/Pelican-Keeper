@@ -96,7 +96,7 @@ public static class ServerMarkdown
         if (Program.Config.Debug)
             ConsoleExt.WriteLineWithPretext($"Server: {viewModel.ServerName}, Message Character Count: {message.Length}");
 
-        return (message, serverResponse.Name);
+        return (message, serverName);
     }
     
     public static void GetMarkdownFileContentAsync()
