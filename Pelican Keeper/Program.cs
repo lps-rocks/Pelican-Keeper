@@ -143,6 +143,8 @@ internal static class Program
                                     }
 
                                     List<DiscordComponent> buttons = [];
+
+                    
                                 
                                     // Build START menus
                                     if (Config.AllowUserServerStartup)
@@ -190,6 +192,11 @@ internal static class Program
                                             );
                                             buttons.Add(stopMenu);
                                         }
+                                    }
+
+                                    if(Config.ShowButtonToPanel)
+                                    {
+                                        buttons.Add(DiscordLinkButtonComponent(Program.Secrets.ServerUrl, "Server Control Panel", false, new DiscordComponentEmoji("⚙️")));
                                     }
 
                                     WriteLineWithPretext("Buttons created: " + buttons.Count);
