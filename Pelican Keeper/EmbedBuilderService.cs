@@ -12,7 +12,7 @@ public class EmbedBuilderService
         var embed = new DiscordEmbedBuilder
         {
             Title = serverInfo.serverName,
-            Color = DiscordColor.Azure
+            Color = DiscordColor.Azure,
         };
         
         embed.AddField("\u200B", serverInfo.message, inline: true);
@@ -40,7 +40,8 @@ public class EmbedBuilderService
         var embed = new DiscordEmbedBuilder
         {
             Title = "📡 Game Server Status Overview",
-            Color = DiscordColor.Azure
+            Color = DiscordColor.Azure,
+            Timestamp = Datetime.Now
         };
 
         for (int i = 0; i < servers.Count && embed.Fields.Count < 25; i++)
@@ -54,11 +55,6 @@ public class EmbedBuilderService
                 ConsoleExt.WriteLineWithPretext(serverInfo.message);
             }
         }
-        
-        embed.Footer = new DiscordEmbedBuilder.EmbedFooter
-        {
-            Text = $"Last Updated: <t:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}:R>"
-        };
         
         if (!Program.Config.Debug) return Task.FromResult(embed.Build());
         
