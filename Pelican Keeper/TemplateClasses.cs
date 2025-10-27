@@ -60,7 +60,7 @@ public abstract class TemplateClasses
         public bool JoinableIpDisplay { get; init; }
         public bool PlayerCountDisplay { get; init; }
         public string[]? ServersToMonitor { get; init; }
-        
+        public bool ShowButtonToPanel { get; init; }
         public bool AutomaticShutdown { get; init; }
         public string[]? ServersToAutoShutdown { get; init; }
         public string? EmptyServerTimeout { get; init; }
