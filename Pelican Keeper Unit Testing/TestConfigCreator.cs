@@ -17,7 +17,7 @@ public class TestConfigCreator
             
             JoinableIpDisplay = true,
             PlayerCountDisplay = true,
-            
+            ShowButtonToPanel = true,
             AutomaticShutdown = true,
             ServersToAutoShutdown = ["UUIDS HERE"],
             EmptyServerTimeout = "00:01:00",
