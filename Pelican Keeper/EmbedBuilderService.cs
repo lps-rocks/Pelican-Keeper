@@ -41,7 +41,7 @@ public class EmbedBuilderService
         {
             Title = "📡 Game Server Status Overview",
             Color = DiscordColor.Azure,
-            Timestamp = Datetime.Now
+            Timestamp = DatetimeOffset.UtcNow
         };
 
         for (int i = 0; i < servers.Count && embed.Fields.Count < 25; i++)
