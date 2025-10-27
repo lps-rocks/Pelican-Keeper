@@ -57,7 +57,7 @@ public class EmbedBuilderService
         
         embed.Footer = new DiscordEmbedBuilder.EmbedFooter
         {
-            Text = $"Last Updated: {DateTime.Now:HH:mm:ss}"
+            Text = $"Last Updated: <t:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}:T>"
         };
         
         if (!Program.Config.Debug) return Task.FromResult(embed.Build());
