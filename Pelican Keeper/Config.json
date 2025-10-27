@@ -10,7 +10,7 @@
   "JoinableIpDisplay": true,
   "PlayerCountDisplay": true,
   "ServersToMonitor": ["UUIDS HERE"],
-  
+  "ShowButtonToPanel": true,
   "AutomaticShutdown": true,
   "ServersToAutoShutdown": ["UUIDS HERE"],
   "EmptyServerTimeout": "00:01:00",
