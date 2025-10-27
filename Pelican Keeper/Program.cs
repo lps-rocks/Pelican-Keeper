@@ -196,7 +196,7 @@ internal static class Program
 
                                     if(Config.ShowButtonToPanel)
                                     {
-                                        buttons.Add(DiscordLinkButtonComponent(Program.Secrets.ServerUrl, "Server Control Panel", false, new DiscordComponentEmoji("⚙️")));
+                                        buttons.Add(new DiscordLinkButtonComponent(Program.Secrets.ServerUrl, "Server Control Panel", false, new DiscordComponentEmoji("⚙️")));
                                     }
 
                                     WriteLineWithPretext("Buttons created: " + buttons.Count);
